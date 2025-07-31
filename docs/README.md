@@ -121,7 +121,7 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICE
 
 **Doğukan Cihan Beyoğlu**
 - GitHub: [@dogukancihanbeyoglu](https://github.com/dogukancihanbeyoglu)
-- LinkedIn: [Doğukan Cihan Beyoğlu](https://linkedin.com/in/dogukancihanbeyoglu)
+- LinkedIn: [Doğukan Cihanbeyoğlu](https://www.linkedin.com/in/dogukanc/)
 
 ## 📞 Destek
 
