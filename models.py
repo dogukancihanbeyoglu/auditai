@@ -24,6 +24,7 @@ class AuditArea(db.Model):
     data_sources = db.relationship("DataSource", back_populates="audit_area", cascade="all, delete-orphan")
     rules = db.relationship("AuditRule", back_populates="audit_area", cascade="all, delete-orphan")
     alarms = db.relationship("Alarm", back_populates="audit_area", cascade="all, delete-orphan")
+    risk_scores = db.relationship("RiskScore", back_populates="audit_area", cascade="all, delete-orphan")
 
 
 class DataSource(db.Model):
@@ -73,6 +74,7 @@ class AuditRule(db.Model):
     data_source = db.relationship("DataSource", back_populates="rules")
     alarms = db.relationship("Alarm", back_populates="rule", cascade="all, delete-orphan")
     executions = db.relationship("RuleExecution", back_populates="rule", cascade="all, delete-orphan")
+    risk_scores = db.relationship("RiskScore", back_populates="rule", cascade="all, delete-orphan")
 
 
 class RuleExecution(db.Model):
@@ -112,6 +114,26 @@ class Alarm(db.Model):
     audit_area = db.relationship("AuditArea", back_populates="alarms")
     data_source = db.relationship("DataSource", back_populates="alarms")
     rule = db.relationship("AuditRule", back_populates="alarms")
+
+
+class RiskScore(db.Model):
+    """Explainable point-in-time risk assessment for one audit rule."""
+
+    __tablename__ = "risk_scores"
+
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey("audit_rules.id"), nullable=False, index=True)
+    audit_area_id = db.Column(db.Integer, db.ForeignKey("audit_areas.id"), nullable=False, index=True)
+    score = db.Column(db.Float, nullable=False)
+    level = db.Column(db.String(16), nullable=False)
+    alarm_count = db.Column(db.Integer, nullable=False, default=0)
+    open_alarm_count = db.Column(db.Integer, nullable=False, default=0)
+    components = db.Column(db.JSON, nullable=False, default=dict)
+    explanation = db.Column(db.Text, nullable=False)
+    calculated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+
+    rule = db.relationship("AuditRule", back_populates="risk_scores")
+    audit_area = db.relationship("AuditArea", back_populates="risk_scores")
 
 
 class User(db.Model):
