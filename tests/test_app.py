@@ -30,6 +30,19 @@ def test_health_and_dashboard(client):
     assert b"Data Sources" in page.data
 
 
+def test_dashboard_insights_and_source_overview_contract(client):
+    insights = client.get("/api/dashboard/insights")
+    assert insights.status_code == 200
+    payload = insights.get_json()
+    assert len(payload["daily_alarms"]) == 7
+    assert payload["source_types"] == {"synthetic": 1}
+    assert payload["top_areas"][0]["name"] == "Payments"
+    source = client.get("/api/data-sources").get_json()[0]
+    assert source["audit_area_name"] == "Payments"
+    assert source["mapping_count"] == 0
+    assert source["quality_check_count"] == 0
+
+
 def test_workspace_pages_are_available(client):
     for path, heading in {
         "/data-sources": b"Upload and inspect controlled datasets",

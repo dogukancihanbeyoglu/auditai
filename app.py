@@ -11,7 +11,7 @@ from flask import Flask, jsonify, render_template, request
 from config import build_runtime_config
 from csrf import init_csrf
 from migration_support import migrate
-from models import Alarm, AuditArea, AuditRule, DataSource, RuleExecution, User, db, utcnow
+from models import Alarm, AuditArea, AuditEvent, AuditRule, DataSource, RuleExecution, User, db, utcnow
 from notifications import notification_service
 from reporting import reporting_bp
 from postgres_routes import postgres_bp
@@ -38,7 +38,11 @@ def serialize_area(area):
 def serialize_source(source):
     records = source.config.get("records", []) if source.config else []
     return {"id": source.id, "name": source.name, "source_type": source.source_type,
-            "audit_area_id": source.audit_area_id, "record_count": len(records)}
+            "audit_area_id": source.audit_area_id, "audit_area_name": source.audit_area.name,
+            "record_count": len(records), "is_active": source.is_active,
+            "last_sync": source.last_sync.isoformat() if source.last_sync else None,
+            "mapping_count": len(source.field_mappings),
+            "quality_check_count": len(source.quality_checks)}
 
 
 def serialize_rule(rule):
@@ -167,6 +171,37 @@ def create_app(test_config=None):
         return jsonify(audit_areas=AuditArea.query.count(), data_sources=DataSource.query.count(),
                        active_rules=AuditRule.query.filter_by(is_active=True).count(),
                        open_alarms=Alarm.query.filter_by(status="open").count())
+
+    @app.get("/api/dashboard/insights")
+    @require_role()
+    def dashboard_insights():
+        now = utcnow()
+        alarms = Alarm.query.all()
+        resolved = [item for item in alarms if item.status == "resolved"]
+        daily = []
+        for offset in range(6, -1, -1):
+            day = (now - timedelta(days=offset)).date()
+            daily.append({"date": day.isoformat(), "count": sum(
+                1 for item in alarms if item.created_at and item.created_at.date() == day)})
+        source_types = {}
+        for source in DataSource.query.all():
+            source_types[source.source_type] = source_types.get(source.source_type, 0) + 1
+        areas = []
+        for area in AuditArea.query.all():
+            areas.append({"id": area.id, "name": area.name, "alarm_count": len(area.alarms),
+                          "rule_count": len(area.rules)})
+        areas.sort(key=lambda item: (-item["alarm_count"], item["name"].lower()))
+        recent_events = AuditEvent.query.order_by(AuditEvent.created_at.desc()).limit(5).all()
+        ai_rules = AuditRule.query.filter_by(rule_type="anomaly", is_active=True).count()
+        return jsonify(
+            critical_alarms=sum(1 for item in alarms if item.status == "open" and item.severity == "critical"),
+            resolved_today=sum(1 for item in resolved if item.updated_at and item.updated_at.date() == now.date()),
+            resolution_rate=round((len(resolved) / len(alarms) * 100), 1) if alarms else 100.0,
+            anomaly_rules=ai_rules, daily_alarms=daily, source_types=source_types,
+            top_areas=areas[:5], recent_events=[{
+                "id": item.id, "action": item.action, "entity_type": item.entity_type,
+                "entity_id": item.entity_id, "created_at": item.created_at.isoformat()
+            } for item in recent_events])
 
     @app.get("/api/data-sources")
     @require_role()
