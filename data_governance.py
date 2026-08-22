@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from models import DataSource, FieldMapping, QualityCheck, QualityCheckRun, db, utcnow
 from security import require_role
+from services.mapping import MappingApplicationError, apply_mappings
 
 
 data_governance_bp = Blueprint("data_governance", __name__)
@@ -225,6 +226,25 @@ def delete_mapping(mapping_id):
     db.session.delete(mapping)
     db.session.commit()
     return "", 204
+
+
+@data_governance_bp.post("/api/data-sources/<int:source_id>/mappings/preview")
+@require_role()
+def preview_mappings(source_id):
+    source = db.get_or_404(DataSource, source_id)
+    payload = request.get_json(silent=True) or {}
+    try:
+        limit = int(payload.get("limit", 25))
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        result = apply_mappings((source.config or {}).get("records", []),
+                                list(source.field_mappings), limit=limit)
+        return jsonify(records=result.records, errors=[item.to_dict() for item in result.errors],
+                       total_errors=result.total_errors, errors_truncated=result.total_errors > len(result.errors),
+                       input_record_count=result.input_record_count,
+                       output_record_count=len(result.records), truncated=result.truncated)
+    except (MappingApplicationError, TypeError, ValueError) as exc:
+        return jsonify(error=str(exc)), 400
 
 
 @data_governance_bp.get("/api/data-sources/<int:source_id>/quality-checks")

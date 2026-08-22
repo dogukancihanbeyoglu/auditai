@@ -7,6 +7,7 @@ from flask import current_app
 from models import Alarm, AuditRule, RuleExecution, db, utcnow
 from services.rule_engine import evaluate_records
 from services.detectors import get_detector
+from services.mapping import mapped_records_for_rule
 
 
 def run_rule(rule: AuditRule, *, trigger: str = "manual", attempt: int = 1) -> RuleExecution:
@@ -14,8 +15,8 @@ def run_rule(rule: AuditRule, *, trigger: str = "manual", attempt: int = 1) -> R
         raise ValueError("rule is inactive")
     execution = RuleExecution(rule=rule, status="running", trigger=trigger, attempt=attempt, started_at=utcnow())
     db.session.add(execution)
-    records = (rule.data_source.config or {}).get("records", [])
     try:
+        records = mapped_records_for_rule(rule)
         params = dict(rule.parameters or {})
         if rule.rule_type == "numeric" and "value" not in params:
             params.update(operator=rule.operator, value=rule.threshold_value)

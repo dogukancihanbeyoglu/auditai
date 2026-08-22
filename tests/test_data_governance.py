@@ -58,6 +58,23 @@ def test_mapping_crud_validates_persisted_schema(app, client):
     assert client.delete(f"/api/mappings/{mapping['id']}").status_code == 204
 
 
+def test_mapping_preview_reports_transformed_records_and_row_errors(client):
+    assert client.post("/api/data-sources/1/mappings", json={"source_column": "amount",
+        "target_field": "canonical_amount", "target_type": "number",
+        "transformation": "to_number", "is_required": True}).status_code == 201
+    response = client.post("/api/data-sources/1/mappings/preview", json={"limit": 3})
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["records"][0]["canonical_amount"] == 50.0
+    assert body["records"][2]["canonical_amount"] is None
+    assert body["total_errors"] == 1
+    assert body["errors"][0]["row_index"] == 2
+    assert body["errors"][0]["source_column"] == "amount"
+    assert body["errors"][0]["target_field"] == "canonical_amount"
+    assert body["truncated"] is False
+    assert client.post("/api/data-sources/1/mappings/preview", json={"limit": 101}).status_code == 400
+
+
 @pytest.mark.parametrize(("payload", "failed", "status"), [
     ({"name": "Vendor required", "check_type": "not_null", "field_name": "vendor"}, 2, "failed"),
     ({"name": "Unique invoice", "check_type": "unique", "field_name": "invoice_id"}, 2, "failed"),

@@ -19,11 +19,25 @@ Then apply the schema revision with `flask --app app db upgrade`.
 ## Mapping endpoints
 
 - `GET|POST /api/data-sources/<source_id>/mappings`
+- `POST /api/data-sources/<source_id>/mappings/preview`
 - `PATCH|DELETE /api/mappings/<mapping_id>`
 
 A mapping connects a discovered `source_column` to a stable `target_field`,
 with an optional target type, transformation and required flag. Source columns
 are validated against persisted schema metadata and record keys.
+
+The preview endpoint accepts `{"limit": 25}` with a maximum of 100. It returns
+raw fields plus mapped target fields, along with row/field-specific conversion
+errors. Error values are bounded and at most 100 errors are returned. Supported
+transformations are deliberately code-free: trim, lowercase, uppercase,
+integer and finite-number conversion. Target types also support strict boolean,
+ISO date and ISO datetime conversion.
+
+Rule execution uses the same mapping service. Raw fields remain available for
+backward compatibility, while canonical target fields can be selected by new
+rules. If conversion fails for a field actually consumed by a rule (including
+comparison, duplicate and anomaly fields), the execution fails explicitly
+instead of silently reducing the audited population.
 
 ## Quality endpoints
 
