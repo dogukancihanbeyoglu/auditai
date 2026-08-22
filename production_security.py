@@ -60,7 +60,7 @@ def configure_production(app, *, max_content_length, rate_limit, rate_window):
 
     @app.before_request
     def enforce_rate_limit():
-        if request.path == "/health":
+        if request.path in {"/health", "/ready"}:
             return None
         if not limiter.allow(request.remote_addr or "unknown"):
             response = jsonify(error="rate limit exceeded")

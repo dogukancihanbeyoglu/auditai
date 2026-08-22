@@ -18,6 +18,7 @@ from security import hash_password, record_event, require_role, security_bp
 from services.execution import run_rule as execute_rule
 from services.rule_engine import InvalidRule, RULE_TYPES, evaluate_records
 from services.scheduler import disable_schedule, inspect_schedule, resume_schedule, run_due_rules
+from ops.readiness import readiness_report
 
 
 SEVERITIES = {"low", "medium", "high", "critical"}
@@ -132,7 +133,12 @@ def create_app(test_config=None):
 
     @app.get("/health")
     def health():
-        return jsonify(status="ok", service="auditai", database="connected")
+        return jsonify(status="ok", service="auditai")
+
+    @app.get("/ready")
+    def ready():
+        payload, status = readiness_report()
+        return jsonify(payload), status
 
     @app.get("/api/summary")
     @require_role()
