@@ -32,6 +32,9 @@ def login(client, email, password):
 
 def test_protected_routes_and_secure_login(client, app):
     assert client.get("/login").status_code == 200
+    anonymous_page = client.get("/", headers={"Accept": "text/html"})
+    assert anonymous_page.status_code == 302
+    assert anonymous_page.headers["Location"].endswith("/login?next=/")
     assert client.get("/api/summary").status_code == 401
     assert login(client, "admin@example.test", "wrong-password").status_code == 401
     assert login(client, "admin@example.test", "admin-password-123").status_code == 200

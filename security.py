@@ -2,7 +2,7 @@
 
 from functools import wraps
 
-from flask import Blueprint, current_app, g, jsonify, render_template, request, session
+from flask import Blueprint, current_app, g, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from models import AuditEvent, User, db
@@ -37,6 +37,8 @@ def require_role(minimum_role="viewer"):
                 return view(*args, **kwargs)
             user = current_user()
             if not user or not user.is_active:
+                if not request.path.startswith("/api/") and request.accept_mimetypes.accept_html:
+                    return redirect(url_for("security.login_page", next=request.full_path.rstrip("?")))
                 return jsonify(error="authentication required"), 401
             if ROLE_LEVEL.get(user.role, -1) < ROLE_LEVEL[minimum_role]:
                 return jsonify(error="insufficient permissions"), 403
