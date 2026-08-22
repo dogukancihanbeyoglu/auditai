@@ -26,8 +26,8 @@ def test_health_and_dashboard(client):
     assert client.get("/health").get_json()["status"] == "ok"
     page = client.get("/")
     assert page.status_code == 200
-    assert b"Continuous control monitoring overview" in page.data
-    assert b"Data Sources" in page.data
+    assert "Sürekli denetim ve kontrol izleme özeti".encode() in page.data
+    assert "Veri Kaynakları".encode() in page.data
 
 
 def test_dashboard_insights_and_source_overview_contract(client):
@@ -45,17 +45,17 @@ def test_dashboard_insights_and_source_overview_contract(client):
 
 def test_workspace_pages_are_available(client):
     for path, heading in {
-        "/data-sources": b"Upload and inspect controlled datasets",
-        "/audit-areas": b"Structure and manage the audit universe",
-        "/data-governance": b"Map fields and execute persistent data-quality controls",
-        "/rules": b"Configure and run audit controls",
-        "/executions": b"Review immutable control run history",
-        "/alerts": b"Triage exceptions, inspect evidence and run bulk actions",
-        "/risk-scores": b"Calculate transparent risk from persisted control evidence",
-        "/reports": b"Management-level control analytics",
-        "/notifications": b"Monitor delivery outbox status",
-        "/audit-logs": b"Review security and business events",
-        "/settings": b"Manage the local workspace",
+        "/data-sources": "Kontrollü veri kümelerini yükleyin ve inceleyin".encode(),
+        "/audit-areas": "Denetim evrenini yapılandırın ve yönetin".encode(),
+        "/data-governance": "Alanları eşleyin ve kalıcı veri kalitesi kontrolleri çalıştırın".encode(),
+        "/rules": "Denetim kontrollerini yapılandırın ve çalıştırın".encode(),
+        "/executions": "Değiştirilemez kontrol çalışma geçmişini inceleyin".encode(),
+        "/alerts": "İstisnaları yönetin, kanıtları inceleyin ve toplu işlem yapın".encode(),
+        "/risk-scores": "Kalıcı kontrol kanıtlarından açıklanabilir risk hesaplayın".encode(),
+        "/reports": "Yönetim düzeyinde kontrol analitiği".encode(),
+        "/notifications": "Bildirim gönderim durumlarını izleyin".encode(),
+        "/audit-logs": "Güvenlik ve iş olaylarını inceleyin".encode(),
+        "/settings": "Yerel çalışma alanını yönetin".encode(),
     }.items():
         response = client.get(path)
         assert response.status_code == 200

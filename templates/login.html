@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>Sign in | AuditAI</title>
+  <title>Giriş | AuditAI</title>
   <style>
     body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07111f;color:#e8eef7;font:15px system-ui,sans-serif}
     main{width:min(390px,90vw);padding:2rem;border:1px solid #24364d;border-radius:14px;background:#0f1d2e}
@@ -11,10 +11,10 @@
     button{margin-top:1.2rem;background:#0e7490;border-color:#22d3ee;font-weight:700;cursor:pointer}#message{color:#fca5a5;min-height:1.5rem}
   </style>
 </head>
-<body><main><h1>AuditAI</h1><p>Sign in to the control-monitoring workspace.</p>
-  <form id="login"><label>Email</label><input name="email" type="email" autocomplete="username" required>
-  <label>Password</label><input name="password" type="password" autocomplete="current-password" required>
-  <button>Sign in</button><p id="message" role="alert"></p></form>
+<body><main><h1>AuditAI</h1><p>Sürekli denetim çalışma alanına giriş yapın.</p>
+  <form id="login"><label>E-posta</label><input name="email" type="email" autocomplete="username" required>
+  <label>Şifre</label><input name="password" type="password" autocomplete="current-password" required>
+  <button>Giriş Yap</button><p id="message" role="alert"></p></form>
 </main><script>
-document.getElementById("login").addEventListener("submit",async event=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.target));const csrf=document.querySelector('meta[name="csrf-token"]').content;const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify(values)});if(response.ok){location.href="/";return}const data=await response.json();document.getElementById("message").textContent=data.error||"Sign-in failed"});
+document.getElementById("login").addEventListener("submit",async event=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.target));const csrf=document.querySelector('meta[name="csrf-token"]').content;const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify(values)});if(response.ok){location.href="/";return}const data=await response.json();document.getElementById("message").textContent=data.error||"Giriş başarısız"});
 </script></body></html>
