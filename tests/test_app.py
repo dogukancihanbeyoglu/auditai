@@ -30,6 +30,16 @@ def test_health_and_dashboard(client):
     assert "Veri Kaynakları".encode() in page.data
 
 
+def test_workspace_includes_accessible_rule_editor_and_module_overviews(client):
+    page = client.get("/rules")
+    assert page.status_code == 200
+    assert b'id="ruleEditDialog"' in page.data
+    assert b'id="ruleEditForm"' in page.data
+    assert "Kontrol bilgilerini düzenle".encode() in page.data
+    assert b"openRuleEditor" in page.data
+    assert b"professionalizePage" in page.data
+
+
 def test_dashboard_insights_and_source_overview_contract(client):
     insights = client.get("/api/dashboard/insights")
     assert insights.status_code == 200
