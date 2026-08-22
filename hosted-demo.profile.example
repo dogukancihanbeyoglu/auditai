@@ -1,0 +1,6 @@
+# Process commands for a privacy-safe hosted demo (documentation only).
+release: flask --app app db upgrade
+web: gunicorn --bind 0.0.0.0:$PORT --workers=2 --threads=4 production:app
+worker: python worker.py --poll-seconds 30
+liveness: /health
+readiness: /ready
