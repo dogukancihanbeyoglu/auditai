@@ -8,6 +8,7 @@ from models import Alarm, AuditRule, RuleExecution, db, utcnow
 from services.rule_engine import evaluate_records
 from services.detectors import get_detector
 from services.mapping import mapped_records_for_rule
+from notification_policies import enqueue_alarm_notifications
 
 
 def run_rule(rule: AuditRule, *, trigger: str = "manual", attempt: int = 1) -> RuleExecution:
@@ -60,6 +61,8 @@ def run_rule(rule: AuditRule, *, trigger: str = "manual", attempt: int = 1) -> R
             )
             rule.trigger_count += 1
             db.session.add(alarm)
+            db.session.flush()
+            enqueue_alarm_notifications(alarm)
         execution.finished_at = utcnow()
         db.session.commit()
         return execution

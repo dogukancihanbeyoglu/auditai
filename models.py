@@ -372,3 +372,19 @@ class Notification(db.Model):
     status = db.Column(db.String(20), nullable=False, default="pending")
     metadata_json = db.Column(db.JSON, nullable=False, default=dict)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class NotificationPolicy(db.Model):
+    """Non-secret routing policy; adapter credentials remain environment-only."""
+
+    __tablename__ = "notification_policies"
+    __table_args__ = (db.UniqueConstraint("severity", "channel", "recipient",
+                                         name="uq_notification_policy_route"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    severity = db.Column(db.String(16), nullable=False)
+    channel = db.Column(db.String(32), nullable=False)
+    recipient = db.Column(db.String(255), nullable=False)
+    enabled = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

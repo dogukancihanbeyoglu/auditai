@@ -13,7 +13,7 @@ from csrf import init_csrf
 from alarm_review import add_alarm_activity, alarm_review_bp
 from migration_support import migrate
 from models import Alarm, AuditArea, AuditEvent, AuditRule, DataSource, RuleExecution, User, db, utcnow
-from notifications import notification_service
+from notification_policies import notification_policies_bp
 from reporting import reporting_bp
 from postgres_routes import postgres_bp
 from security import hash_password, record_event, require_role, security_bp
@@ -117,6 +117,7 @@ def create_app(test_config=None):
     app.register_blueprint(data_governance_bp)
     app.register_blueprint(risk_alerts_bp)
     app.register_blueprint(alarm_review_bp)
+    app.register_blueprint(notification_policies_bp)
     app.register_blueprint(source_sync_bp)
     app.register_blueprint(rule_lifecycle_bp)
 
@@ -318,8 +319,6 @@ def create_app(test_config=None):
         alarm = None
         if execution.matched_records:
             alarm = Alarm.query.filter_by(rule_id=rule.id).order_by(Alarm.id.desc()).first()
-            notification_service.notify(f"Audit alert: {rule.name}", alarm.message,
-                                        metadata={"alarm_id": alarm.id, "severity": alarm.severity})
         record_event("rule_run", "audit_rule", rule.id,
                      {"execution_id": execution.id, "status": execution.status,
                       "scanned_records": execution.scanned_records,

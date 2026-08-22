@@ -43,6 +43,14 @@ def review_history(alarm_id):
                    timeline=[_serialize(item) for item in items])
 
 
+@alarm_review_bp.get("/api/alerts/assignee-options")
+@require_role("auditor")
+def assignee_options():
+    users = User.query.filter(User.is_active.is_(True), User.role.in_(("auditor", "admin"))).order_by(
+        User.email, User.id).all()
+    return jsonify([{"id": user.id, "email": user.email, "role": user.role} for user in users])
+
+
 @alarm_review_bp.post("/api/alerts/<int:alarm_id>/assignment")
 @require_role("auditor")
 def assign_alarm(alarm_id):
