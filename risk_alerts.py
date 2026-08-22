@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from models import Alarm, AuditRule, DetectionFeedback, RiskScore, db, utcnow
 from security import current_user, record_event, require_role
+from alarm_review import add_alarm_activity
 
 
 risk_alerts_bp = Blueprint("risk_alerts", __name__)
@@ -200,8 +201,11 @@ def bulk_alarm_status():
         return jsonify(error="invalid alarm status transition", alarm_ids=invalid), 409
     changed_at = utcnow()
     for alarm in alarms:
+        previous_status = alarm.status
         alarm.status = target_status
         alarm.updated_at = changed_at
+        add_alarm_activity(alarm, "status", from_value=previous_status, to_value=target_status,
+                           details={"bulk": True})
     record_event("alarms_bulk_status_changed", "alarm", details={
         "alarm_ids": sorted(alarm_ids), "action": action, "count": len(alarms),
     })

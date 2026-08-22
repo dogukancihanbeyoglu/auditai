@@ -10,6 +10,7 @@ from flask import Flask, jsonify, render_template, request
 
 from config import build_runtime_config
 from csrf import init_csrf
+from alarm_review import add_alarm_activity, alarm_review_bp
 from migration_support import migrate
 from models import Alarm, AuditArea, AuditEvent, AuditRule, DataSource, RuleExecution, User, db, utcnow
 from notifications import notification_service
@@ -115,6 +116,7 @@ def create_app(test_config=None):
     app.register_blueprint(audit_areas_bp)
     app.register_blueprint(data_governance_bp)
     app.register_blueprint(risk_alerts_bp)
+    app.register_blueprint(alarm_review_bp)
     app.register_blueprint(source_sync_bp)
     app.register_blueprint(rule_lifecycle_bp)
 
@@ -383,8 +385,10 @@ def create_app(test_config=None):
         status = (request.get_json(silent=True) or {}).get("status")
         if status not in STATUSES:
             return jsonify(error="invalid status"), 400
+        previous_status = alarm.status
         alarm.status = status
         alarm.updated_at = utcnow()
+        add_alarm_activity(alarm, "status", from_value=previous_status, to_value=status)
         record_event("alarm_status_changed", "alarm", alarm.id, {"status": status})
         db.session.commit()
         return jsonify(serialize_alarm(alarm))

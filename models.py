@@ -248,6 +248,25 @@ class Alarm(db.Model):
     rule = db.relationship("AuditRule", back_populates="alarms")
 
 
+class AlarmActivity(db.Model):
+    """Append-only assignment, note and status history for an alarm review."""
+
+    __tablename__ = "alarm_activities"
+
+    id = db.Column(db.Integer, primary_key=True)
+    alarm_id = db.Column(db.Integer, db.ForeignKey("alarms.id"), nullable=False, index=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    event_type = db.Column(db.String(24), nullable=False, index=True)
+    from_value = db.Column(db.String(255), nullable=True)
+    to_value = db.Column(db.String(255), nullable=True)
+    note = db.Column(db.Text, nullable=False, default="")
+    details = db.Column(db.JSON, nullable=False, default=dict)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+
+    alarm = db.relationship("Alarm")
+    actor = db.relationship("User", foreign_keys=[actor_id])
+
+
 class RiskScore(db.Model):
     """Explainable point-in-time risk assessment for one audit rule."""
 
