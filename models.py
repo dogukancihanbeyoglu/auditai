@@ -51,6 +51,10 @@ class AuditRule(db.Model):
     field_name = db.Column(db.String(64), nullable=False)
     operator = db.Column(db.String(8), nullable=False, default=">")
     threshold_value = db.Column(db.Float, nullable=False)
+    rule_type = db.Column(db.String(24), nullable=False, default="numeric")
+    parameters = db.Column(db.JSON, nullable=False, default=dict)
+    schedule_interval_minutes = db.Column(db.Integer, nullable=True)
+    next_run_at = db.Column(db.DateTime(timezone=True), nullable=True)
     severity = db.Column(db.String(16), nullable=False, default="medium")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     last_run_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -61,6 +65,25 @@ class AuditRule(db.Model):
     audit_area = db.relationship("AuditArea", back_populates="rules")
     data_source = db.relationship("DataSource", back_populates="rules")
     alarms = db.relationship("Alarm", back_populates="rule", cascade="all, delete-orphan")
+    executions = db.relationship("RuleExecution", back_populates="rule", cascade="all, delete-orphan")
+
+
+class RuleExecution(db.Model):
+    """Immutable evidence about one rule evaluation."""
+
+    __tablename__ = "rule_executions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey("audit_rules.id"), nullable=False, index=True)
+    status = db.Column(db.String(16), nullable=False)
+    trigger = db.Column(db.String(16), nullable=False, default="manual")
+    scanned_records = db.Column(db.Integer, nullable=False, default=0)
+    matched_records = db.Column(db.Integer, nullable=False, default=0)
+    error_message = db.Column(db.Text, nullable=True)
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    rule = db.relationship("AuditRule", back_populates="executions")
 
 
 class Alarm(db.Model):
