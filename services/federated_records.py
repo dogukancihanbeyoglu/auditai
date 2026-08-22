@@ -74,6 +74,7 @@ def load_federated_records(rule, *, max_source_records: int = 10_000,
 
 def _validate_links(rule, links) -> None:
     aliases = set()
+    rule_area_id = rule.audit_area_id or getattr(rule.audit_area, "id", None)
     if links[0].data_source_id != rule.data_source_id:
         raise FederatedLoadError("the first federated source must be the rule primary data source")
     for index, link in enumerate(links):
@@ -81,7 +82,7 @@ def _validate_links(rule, links) -> None:
             raise FederatedLoadError("source alias must be a safe identifier")
         if link.alias in aliases:
             raise FederatedLoadError("source aliases must be unique")
-        if link.data_source.audit_area_id != rule.audit_area_id:
+        if link.data_source.audit_area_id != rule_area_id:
             raise FederatedLoadError("all rule sources must belong to the rule audit area")
         if link.join_type not in JOIN_TYPES or link.join_operator not in JOIN_OPERATORS:
             raise FederatedLoadError("unsupported join type or operator")
