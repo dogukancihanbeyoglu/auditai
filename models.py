@@ -41,6 +41,71 @@ class DataSource(db.Model):
     audit_area = db.relationship("AuditArea", back_populates="data_sources")
     rules = db.relationship("AuditRule", back_populates="data_source")
     alarms = db.relationship("Alarm", back_populates="data_source")
+    field_mappings = db.relationship("FieldMapping", back_populates="data_source",
+                                     cascade="all, delete-orphan")
+    quality_checks = db.relationship("QualityCheck", back_populates="data_source",
+                                     cascade="all, delete-orphan")
+
+
+class FieldMapping(db.Model):
+    """Maps a discovered source column to a stable audit-domain field."""
+
+    __tablename__ = "field_mappings"
+    __table_args__ = (db.UniqueConstraint("data_source_id", "source_column", "target_field",
+                                         name="uq_field_mapping_source_target"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_source_id = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=False, index=True)
+    source_column = db.Column(db.String(128), nullable=False)
+    target_field = db.Column(db.String(128), nullable=False)
+    target_type = db.Column(db.String(24), nullable=False, default="string")
+    transformation = db.Column(db.String(24), nullable=False, default="none")
+    is_required = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+    data_source = db.relationship("DataSource", back_populates="field_mappings")
+
+
+class QualityCheck(db.Model):
+    """Reusable quality assertion evaluated against persisted source records."""
+
+    __tablename__ = "quality_checks"
+    __table_args__ = (db.UniqueConstraint("data_source_id", "name", name="uq_quality_check_source_name"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_source_id = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    check_type = db.Column(db.String(32), nullable=False)
+    field_name = db.Column(db.String(128), nullable=False)
+    parameters = db.Column(db.JSON, nullable=False, default=dict)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    last_run_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+    data_source = db.relationship("DataSource", back_populates="quality_checks")
+    runs = db.relationship("QualityCheckRun", back_populates="quality_check",
+                           cascade="all, delete-orphan")
+
+
+class QualityCheckRun(db.Model):
+    """Immutable evidence from one data-quality execution."""
+
+    __tablename__ = "quality_check_runs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    quality_check_id = db.Column(db.Integer, db.ForeignKey("quality_checks.id"), nullable=False, index=True)
+    status = db.Column(db.String(16), nullable=False)
+    scanned_records = db.Column(db.Integer, nullable=False, default=0)
+    failed_records = db.Column(db.Integer, nullable=False, default=0)
+    pass_rate = db.Column(db.Float, nullable=False, default=0.0)
+    failure_sample = db.Column(db.JSON, nullable=False, default=list)
+    error_message = db.Column(db.Text, nullable=True)
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    quality_check = db.relationship("QualityCheck", back_populates="runs")
 
 
 class AuditRule(db.Model):
