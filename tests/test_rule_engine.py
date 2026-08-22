@@ -51,3 +51,12 @@ def test_field_comparison():
 def test_invalid_rule_is_rejected_instead_of_executed():
     with pytest.raises(InvalidRule, match="unsupported text operator"):
         evaluate_records(RECORDS, rule_type="text", field="vendor", parameters={"operator": "regex", "value": ".*"})
+
+
+def test_evidence_sampling_retains_total_match_count():
+    records = [{"id": index, "amount": 100} for index in range(20)]
+    result = evaluate_records(records, rule_type="numeric", field="amount",
+                              parameters={"operator": ">", "value": 10}, max_matches=3)
+    assert result.scanned_records == 20
+    assert result.matched_records == 20
+    assert len(result.matches) == 3

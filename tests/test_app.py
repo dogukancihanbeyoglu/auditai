@@ -76,3 +76,11 @@ def test_advanced_rule_api_records_execution_history(client):
     history = client.get("/api/rule-executions").get_json()
     assert history[0]["id"] == result["execution_id"]
     assert history[0]["rule_name"] == "Amount is present"
+
+    disabled = client.patch(f"/api/rules/{rule['id']}/schedule", json={"enabled": False})
+    assert disabled.status_code == 200
+    assert disabled.get_json()["enabled"] is False
+    resumed = client.patch(f"/api/rules/{rule['id']}/schedule",
+                           json={"enabled": True, "interval_minutes": 30})
+    assert resumed.status_code == 200
+    assert resumed.get_json()["interval_minutes"] == 30
