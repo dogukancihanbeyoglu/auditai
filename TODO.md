@@ -76,12 +76,15 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 
 ## P0 — Yerel ürün tamamlama (aktif çalışma)
 
+Uygulama sırası: **P0 veri sürekliliği → P0 alarm/bildirim operasyonları → P1 risk analitiği → P1 arayüz ve dil → P0 uçtan uca kabul testi**.
+
 ### Veri ve eşleme — sorumlu: data_ingestion
 
 - [x] Kayıtlı alan eşlemelerini gerçek verilere uygulayan dönüşüm servisi
 - [x] Eşleme önizlemesi ve satır/alan bazlı dönüşüm hata raporu
 - [x] Kural motorunun standartlaştırılmış hedef alanları kullanması
-- [ ] SQLite/PostgreSQL bağlantı testi, tablo seçimi ve önizleme akışının tamamlanması
+- [x] CSV/XLSX kaynaklarını sürüm ve checksum ile güvenli biçimde yenileme
+- [x] SQLite/PostgreSQL bağlantı testi, tablo seçimi ve önizleme akışının tamamlanması
 
 ### Kural ve otomasyon — sorumlu: rule_scheduler
 
@@ -93,15 +96,17 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 ### Alarm, risk ve raporlama — sorumlu: security_reporting
 
 - [x] Alarm sorumlusu, denetçi notları ve durum zaman çizelgesi
+- [x] Alarm sorumlusu seçimi için rol kontrollü kullanıcı listesi
+- [x] Önem seviyesi/kanal/alıcı bazlı bildirim politikaları ve test gönderimi
 - [ ] Alarmdan ilgili kaynak, kural ve çalıştırmaya izlenebilir geçiş
-- [ ] Risk skoru bileşenleri ve dönemsel karşılaştırma verisi
+- [x] Risk skoru bileşenleri ve dönemsel karşılaştırma verisi
 - [x] Tarih/denetim alanı filtreli yönetim raporu ve denetim kanıt paketi
 
 ### Arayüz ve bütünleştirme — sorumlu: ana ajan
 
-- [ ] Veri bağlantısı, eşleme, kural, alarm ve rapor ekranlarını yönlendirmeli akışlara dönüştürme
+- [x] Veri bağlantısı, eşleme, kural, alarm ve rapor ekranlarını yönlendirmeli akışlara dönüştürme
 - [ ] Kalite kontrollerini düzenleme, silme ve devre dışı bırakma
-- [ ] Bildirim politikası ve test bildirimi ayar ekranı
+- [x] Bildirim politikası ve test bildirimi ayar ekranı
 - [ ] Tüm statik/dinamik arayüz metinlerini doğrudan Türkçeleştirme
 - [ ] Mobil görünüm, boş durumlar, hata mesajları ve erişilebilirlik kontrolü
 - [ ] Uçtan uca yerel senaryo: kaynak → eşleme → kalite → kural → çalışma → alarm → rapor
