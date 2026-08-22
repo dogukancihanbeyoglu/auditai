@@ -27,6 +27,7 @@ def test_health_and_dashboard(client):
     page = client.get("/")
     assert page.status_code == 200
     assert b"Run control" in page.data
+    assert b"Add a data source" in page.data
 
 
 def test_create_run_and_resolve_rule(client):

@@ -16,6 +16,7 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 - [x] Preview sheets, columns, inferred types and sample rows
 - [x] Persist normalized source metadata without storing credentials in source control
 - [x] Connect to a local SQLite database through a read-only restricted adapter
+- [x] Connect to named PostgreSQL source profiles through a read-only restricted adapter
 - [x] Add SQLite schema and table discovery
 - [x] Map discovered source columns to rule fields
 - [x] Record ingestion counts, timestamps, failures and validation errors
@@ -54,12 +55,12 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 
 ## P2 — Reporting and notifications
 
-- [ ] Filterable execution and alert history
+- [x] Filterable execution and alert history
 - [x] CSV audit-evidence export
-- [ ] Management summary report
+- [x] Management summary report
 - [x] Notification abstraction with a persistent in-app implementation
-- [ ] Email/webhook adapters configured only through environment secrets
-- [ ] Delivery status and retry tracking
+- [x] Email/webhook adapters configured only through environment secrets
+- [x] Delivery status and retry tracking
 
 ## P2 — Production readiness
 
@@ -68,8 +69,8 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 - [x] Structured application logging
 - [x] Rate limiting and request-size limits
 - [x] Dependency and secret scanning
-- [ ] Backup and recovery runbook
-- [ ] Load and large-dataset tests
+- [x] Backup and recovery runbook
+- [x] Load and large-dataset tests
 - [x] Container image and non-root runtime
 - [ ] Hosted privacy-safe demonstration
 
