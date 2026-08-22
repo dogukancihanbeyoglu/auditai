@@ -6,10 +6,10 @@ from models import Alarm, AuditRule, RuleExecution, db, utcnow
 from services.rule_engine import evaluate_records
 
 
-def run_rule(rule: AuditRule, *, trigger: str = "manual") -> RuleExecution:
+def run_rule(rule: AuditRule, *, trigger: str = "manual", attempt: int = 1) -> RuleExecution:
     if not rule.is_active:
         raise ValueError("rule is inactive")
-    execution = RuleExecution(rule=rule, status="running", trigger=trigger, started_at=utcnow())
+    execution = RuleExecution(rule=rule, status="running", trigger=trigger, attempt=attempt, started_at=utcnow())
     db.session.add(execution)
     records = (rule.data_source.config or {}).get("records", [])
     try:
