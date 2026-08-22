@@ -114,3 +114,12 @@ Uygulama sırası: **P0 veri sürekliliği → P0 alarm/bildirim operasyonları 
 ## Definition of done
 
 Every completed capability must include automated tests, error handling, safe defaults, updated documentation and a reproducible local verification command. Production or confidential data must never be committed.
+
+## Sentetik kurumsal veri ortamı
+
+- [x] SAP benzeri şirket kodu, maliyet merkezi, belge, personel, tedarikçi ve sipariş ilişkileri
+- [x] İK, finans ve satın alma için üç bağımsız SQLite veritabanı
+- [x] Sekiz tabloyu AuditAI veri kaynağı olarak kaydetme
+- [x] Kontrollü bordro, yevmiye, görevler ayrılığı, mükerrer fatura ve fiyat farkı senaryoları
+- [x] Altı çalışabilir denetim kuralı ve üç veri kalitesi kontrolü
+- [x] Sabit seed, sentetik veri işareti, veri sözlüğü ve otomatik üretici testleri
