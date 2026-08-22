@@ -116,6 +116,43 @@ def create_user():
     return jsonify(id=user.id, email=user.email, role=user.role), 201
 
 
+def _user_json(user):
+    return {"id": user.id, "email": user.email, "role": user.role,
+            "is_active": user.is_active, "created_at": user.created_at.isoformat()}
+
+
+@security_bp.get("/api/users")
+@require_role("admin")
+def list_users():
+    return jsonify([_user_json(user) for user in User.query.order_by(User.email).all()])
+
+
+@security_bp.patch("/api/users/<int:user_id>")
+@require_role("admin")
+def update_user(user_id):
+    user = db.get_or_404(User, user_id)
+    payload = request.get_json(silent=True) or {}
+    unknown = set(payload) - {"role", "is_active"}
+    if unknown:
+        return jsonify(error=f"unknown fields: {', '.join(sorted(unknown))}"), 400
+    new_role = payload.get("role", user.role)
+    new_active = payload.get("is_active", user.is_active)
+    if new_role not in ROLES or not isinstance(new_active, bool):
+        return jsonify(error="valid role and boolean is_active are required"), 400
+    removing_admin = user.role == "admin" and user.is_active and (
+        new_role != "admin" or not new_active)
+    if removing_admin and User.query.filter_by(role="admin", is_active=True).count() <= 1:
+        return jsonify(error="the last active administrator cannot be disabled or demoted"), 409
+    before = {"role": user.role, "is_active": user.is_active}
+    user.role = new_role
+    user.is_active = new_active
+    record_event("user_updated", "user", user.id,
+                 {"email": user.email, "before": before,
+                  "after": {"role": user.role, "is_active": user.is_active}})
+    db.session.commit()
+    return jsonify(_user_json(user))
+
+
 @security_bp.get("/api/audit-events")
 @require_role("admin")
 def audit_events():

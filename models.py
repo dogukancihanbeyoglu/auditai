@@ -281,6 +281,26 @@ class User(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class DetectionFeedback(db.Model):
+    """Auditor disposition of an alarm for measurable detector quality."""
+
+    __tablename__ = "detection_feedback"
+    __table_args__ = (db.UniqueConstraint("alarm_id", "user_id", name="uq_feedback_alarm_user"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    alarm_id = db.Column(db.Integer, db.ForeignKey("alarms.id"), nullable=False, index=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey("audit_rules.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    outcome = db.Column(db.String(24), nullable=False)
+    comment = db.Column(db.Text, nullable=False, default="")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+    alarm = db.relationship("Alarm")
+    rule = db.relationship("AuditRule")
+    user = db.relationship("User")
+
+
 class AuditEvent(db.Model):
     """Append-only record of security and business-significant actions."""
 

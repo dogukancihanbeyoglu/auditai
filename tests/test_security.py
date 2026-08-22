@@ -71,3 +71,44 @@ def test_admin_can_create_user_with_password_policy(client):
                                                "password": "auditor-password-123", "role": "auditor"})
     assert created.status_code == 201
     assert created.get_json()["role"] == "auditor"
+
+
+def test_admin_can_manage_users_but_cannot_remove_last_admin(client, app):
+    login(client, "admin@example.test", "admin-password-123")
+    users = client.get("/api/users")
+    assert users.status_code == 200
+    viewer = next(item for item in users.get_json() if item["role"] == "viewer")
+    updated = client.patch(f"/api/users/{viewer['id']}", json={"role": "auditor", "is_active": False})
+    assert updated.status_code == 200
+    assert updated.get_json()["role"] == "auditor"
+    assert updated.get_json()["is_active"] is False
+    admin = next(item for item in users.get_json() if item["role"] == "admin")
+    protected = client.patch(f"/api/users/{admin['id']}", json={"is_active": False})
+    assert protected.status_code == 409
+    with app.app_context():
+        assert AuditEvent.query.filter_by(action="user_updated").count() == 1
+
+
+def test_system_health_is_admin_only(client):
+    login(client, "viewer@example.test", "viewer-password-123")
+    assert client.get("/api/system-health").status_code == 403
+    client.post("/api/auth/logout")
+    login(client, "admin@example.test", "admin-password-123")
+    response = client.get("/api/system-health")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["readiness"]["status"] == "ready"
+    assert payload["components"]["database"]["ready"] is True
+
+
+def test_auditor_feedback_produces_measurable_detector_metrics(client):
+    login(client, "admin@example.test", "admin-password-123")
+    alarm_id = client.post("/api/rules/1/run").get_json()["alarm_id"]
+    saved = client.post(f"/api/alerts/{alarm_id}/feedback",
+                        json={"outcome": "true_positive", "comment": "Confirmed against ledger."})
+    assert saved.status_code == 200
+    performance = client.get("/api/rules/1/detection-performance").get_json()
+    assert performance["reviewed"] == 1
+    assert performance["true_positives"] == 1
+    assert performance["precision"] == 1.0
+    assert performance["status"] == "insufficient_feedback"

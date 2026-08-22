@@ -2,8 +2,8 @@
 
 from flask import Blueprint, jsonify, request
 
-from models import Alarm, AuditRule, RiskScore, db, utcnow
-from security import record_event, require_role
+from models import Alarm, AuditRule, DetectionFeedback, RiskScore, db, utcnow
+from security import current_user, record_event, require_role
 
 
 risk_alerts_bp = Blueprint("risk_alerts", __name__)
@@ -130,6 +130,43 @@ def alarm_detail(alarm_id):
         "affected_records_truncated": len(evidence) > MAX_EVIDENCE_RECORDS,
         "created_at": alarm.created_at.isoformat(), "updated_at": alarm.updated_at.isoformat(),
     })
+
+
+@risk_alerts_bp.post("/api/alerts/<int:alarm_id>/feedback")
+@require_role("auditor")
+def save_detection_feedback(alarm_id):
+    alarm = db.get_or_404(Alarm, alarm_id)
+    payload = request.get_json(silent=True) or {}
+    outcome = payload.get("outcome")
+    comment = str(payload.get("comment", "")).strip()
+    if outcome not in {"true_positive", "false_positive"} or len(comment) > 2000:
+        return jsonify(error="outcome must be true_positive or false_positive; comment max 2000"), 400
+    user = current_user()
+    feedback = DetectionFeedback.query.filter_by(alarm_id=alarm.id, user_id=user.id).first()
+    if not feedback:
+        feedback = DetectionFeedback(alarm=alarm, rule=alarm.rule, user=user)
+        db.session.add(feedback)
+    feedback.outcome = outcome
+    feedback.comment = comment
+    record_event("detection_feedback_recorded", "alarm", alarm.id, {"outcome": outcome})
+    db.session.commit()
+    return jsonify(id=feedback.id, alarm_id=alarm.id, rule_id=alarm.rule_id,
+                   outcome=feedback.outcome, comment=feedback.comment)
+
+
+@risk_alerts_bp.get("/api/rules/<int:rule_id>/detection-performance")
+@require_role("auditor")
+def detection_performance(rule_id):
+    rule = db.get_or_404(AuditRule, rule_id)
+    feedback = DetectionFeedback.query.filter_by(rule_id=rule.id).all()
+    positives = sum(item.outcome == "true_positive" for item in feedback)
+    false_positives = sum(item.outcome == "false_positive" for item in feedback)
+    reviewed = len(feedback)
+    return jsonify(rule_id=rule.id, rule_name=rule.name, reviewed=reviewed,
+                   true_positives=positives, false_positives=false_positives,
+                   precision=round(positives / reviewed, 4) if reviewed else None,
+                   status="measured" if reviewed >= 5 else "insufficient_feedback",
+                   minimum_feedback=5)
 
 
 @risk_alerts_bp.post("/api/alerts/bulk-status")

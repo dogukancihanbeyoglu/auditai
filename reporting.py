@@ -73,7 +73,7 @@ def alarms_csv():
 
 
 @reporting_bp.get("/api/reports/alarms")
-@require_role("auditor")
+@require_role()
 def alarm_history():
     items = _alarm_query().order_by(Alarm.created_at.desc()).limit(500).all()
     return jsonify([{"id": item.id, "title": item.title, "status": item.status,
@@ -83,7 +83,7 @@ def alarm_history():
 
 
 @reporting_bp.get("/api/reports/executions")
-@require_role("auditor")
+@require_role()
 def execution_history():
     items = _execution_query().order_by(RuleExecution.started_at.desc()).limit(500).all()
     return jsonify([{"id": item.id, "rule_id": item.rule_id, "rule_name": item.rule.name,
@@ -95,7 +95,7 @@ def execution_history():
 
 
 @reporting_bp.get("/api/reports/management-summary")
-@require_role("auditor")
+@require_role()
 def management_summary():
     executions = _execution_query()
     alarms = _alarm_query()

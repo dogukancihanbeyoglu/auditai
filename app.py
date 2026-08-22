@@ -151,7 +151,7 @@ def create_app(test_config=None):
     def workspace_page(page_name):
         pages = {"audit-areas", "data-sources", "data-governance", "rules",
                  "executions", "alerts", "risk-scores", "reports",
-                 "notifications", "audit-logs", "settings"}
+                 "notifications", "audit-logs", "system-health", "settings"}
         if page_name not in pages:
             return jsonify(error="page not found"), 404
         return render_template("workspace.html", page=page_name)
@@ -202,6 +202,39 @@ def create_app(test_config=None):
                 "id": item.id, "action": item.action, "entity_type": item.entity_type,
                 "entity_id": item.entity_id, "created_at": item.created_at.isoformat()
             } for item in recent_events])
+
+    @app.get("/api/system-health")
+    @require_role("admin")
+    def system_health():
+        readiness, _ = readiness_report()
+        failed_executions = RuleExecution.query.filter_by(status="failed").order_by(
+            RuleExecution.started_at.desc()).limit(10).all()
+        inactive_sources = DataSource.query.filter_by(is_active=False).count()
+        disabled_rules = AuditRule.query.filter_by(schedule_enabled=False).count()
+        failed_syncs = sum(1 for source in DataSource.query.all() for run in source.sync_runs
+                           if run.status == "failed")
+        healthy = readiness["status"] == "ready" and not failed_executions and not failed_syncs
+        return jsonify(
+            overall="healthy" if healthy else "warning",
+            readiness=readiness,
+            components={
+                "database": readiness["checks"].get("database", {}),
+                "schema": readiness["checks"].get("schema", {}),
+                "rules": {"failed_executions": len(failed_executions),
+                          "disabled_schedules": disabled_rules},
+                "data_sources": {"inactive": inactive_sources, "failed_syncs": failed_syncs},
+            },
+            recent_failures=[{
+                "execution_id": item.id, "rule_id": item.rule_id,
+                "rule_name": item.rule.name, "error": item.error_message,
+                "started_at": item.started_at.isoformat()
+            } for item in failed_executions],
+            recommendations=[
+                "Review failed control executions and their bounded evidence.",
+                "Verify inactive sources and failed synchronization runs.",
+                "Review critical alerts and audit events regularly.",
+            ],
+        )
 
     @app.get("/api/data-sources")
     @require_role()
