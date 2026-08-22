@@ -8,6 +8,8 @@ from models import Alarm, AuditRule, RuleExecution, db, utcnow
 from services.rule_engine import evaluate_records
 from services.detectors import get_detector
 from services.mapping import mapped_records_for_rule
+from services.federated_records import load_federated_records
+from services.compound_rule_engine import evaluate_compound_rule
 from notification_policies import enqueue_alarm_notifications
 
 
@@ -17,11 +19,22 @@ def run_rule(rule: AuditRule, *, trigger: str = "manual", attempt: int = 1) -> R
     execution = RuleExecution(rule=rule, status="running", trigger=trigger, attempt=attempt, started_at=utcnow())
     db.session.add(execution)
     try:
-        records = mapped_records_for_rule(rule)
+        records = (load_federated_records(
+            rule, max_source_records=current_app.config.get("FEDERATED_SOURCE_LIMIT", 10_000),
+            max_output_records=current_app.config.get("FEDERATED_OUTPUT_LIMIT", 10_000)).records
+            if rule.source_links else mapped_records_for_rule(rule))
         params = dict(rule.parameters or {})
         if rule.rule_type == "numeric" and "value" not in params:
             params.update(operator=rule.operator, value=rule.threshold_value)
-        if rule.rule_type == "anomaly":
+        if rule.rule_type == "compound":
+            result = evaluate_compound_rule(
+                records, params,
+                max_evidence=min(int(current_app.config.get("EVIDENCE_SAMPLE_LIMIT", 1_000)), 10_000))
+            scanned_records = result.scanned_records
+            matched_records = result.selected_records
+            matches = list(result.evidence) if result.alarm_triggered else []
+            result_label = "compound"
+        elif rule.rule_type == "anomaly":
             detector = get_detector(str(params.get("detector", "statistical_zscore")))
             result = detector.detect(
                 records,

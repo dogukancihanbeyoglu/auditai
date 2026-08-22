@@ -6,6 +6,7 @@ from models import AuditArea, AuditRule, DataSource, RuleExecution, db
 from security import record_event, require_role
 from services.detectors import DetectorError, get_detector
 from services.rule_engine import InvalidRule, RULE_TYPES, evaluate_records
+from services.compound_rule_engine import CompoundRuleError, validate_compound_rule
 from services.scheduler import inspect_schedule
 
 
@@ -92,14 +93,17 @@ def update_rule(rule_id):
     if severity not in SEVERITIES:
         return jsonify(error="invalid severity"), 400
     rule_type = str(payload.get("rule_type", rule.rule_type))
-    if rule_type not in RULE_TYPES | {"anomaly"}:
+    if rule_type not in RULE_TYPES | {"anomaly", "compound"}:
         return jsonify(error="invalid rule type"), 400
     field_name = str(payload.get("field_name", rule.field_name)).strip()
     parameters = dict(payload.get("parameters", rule.parameters) or {})
     if definition_changed:
         try:
-            _validate_definition(rule_type, field_name, parameters)
-        except (InvalidRule, DetectorError, TypeError, ValueError) as exc:
+            if rule_type == "compound":
+                parameters = validate_compound_rule(parameters)
+            else:
+                _validate_definition(rule_type, field_name, parameters)
+        except (InvalidRule, DetectorError, CompoundRuleError, TypeError, ValueError) as exc:
             return jsonify(error=str(exc)), 400
     area_id = payload.get("audit_area_id", rule.audit_area_id)
     source_id = payload.get("data_source_id", rule.data_source_id)

@@ -115,6 +115,25 @@ Uygulama sırası: **P0 veri sürekliliği → P0 alarm/bildirim operasyonları 
 
 Every completed capability must include automated tests, error handling, safe defaults, updated documentation and a reproducible local verification command. Production or confidential data must never be committed.
 
+## P0 — Çoklu kaynaklı bileşik kontrol motoru (aktif çalışma)
+
+- [ ] Bir kontrolü birden fazla veritabanı, veri kaynağı ve tabloya bağlama
+- [ ] Kaynaklara anlaşılır alias verme ve alan kataloğu oluşturma
+- [ ] Kaynakları tanımlı anahtarlarla güvenli inner/left join üzerinden birleştirme
+- [ ] Eşleşmeyen ilişkili kaydı denetim istisnası olarak yakalama
+- [ ] İç içe `AND`, `OR` ve `NOT` koşul grupları oluşturma
+- [ ] Alan–değer, alan–alan ve kaynaklar arası alan karşılaştırmaları
+- [ ] Koşul sağlandığında veya sağlanmadığında alarm üretme seçeneği
+- [ ] Eşleşme sayısı ve oranı için alarm eşikleri
+- [ ] Doğrudan SQL çalıştırmadan doğrulanan ve sınırlandırılan kural sözleşmesi
+- [ ] Birleştirme ve koşul planının çalıştırma önizlemesi
+- [ ] Alarmda kaynak, tablo, kayıt ve koşul bazlı açıklanabilir kanıt
+- [ ] Görsel Çoklu Kaynak Kontrol Tasarımcısı
+- [ ] Bileşik kontroller için zamanlama, sürümleme ve değiştirilemez çalışma izi
+- [ ] Rol bazlı yetki, audit event ve güvenli hata mesajları
+- [ ] Birim, entegrasyon, performans ve uçtan uca kabul testleri
+- [ ] SAP–İK–kart geçişi ve SAT/SAS senaryolarıyla yerel kabul doğrulaması
+
 ## Sentetik kurumsal veri ortamı
 
 - [x] SAP benzeri şirket kodu, maliyet merkezi, belge, personel, tedarikçi ve sipariş ilişkileri

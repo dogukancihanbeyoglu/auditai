@@ -28,6 +28,7 @@ from risk_alerts import risk_alerts_bp
 from source_sync import source_sync_bp
 from services.detectors import DetectorError, get_detector
 from rule_lifecycle import rule_lifecycle_bp
+from compound_rules import compound_rules_bp
 
 
 SEVERITIES = {"low", "medium", "high", "critical"}
@@ -59,7 +60,13 @@ def serialize_rule(rule):
             "is_active": rule.is_active, "trigger_count": rule.trigger_count,
             "audit_area_id": rule.audit_area_id, "data_source_id": rule.data_source_id,
             "last_run_at": rule.last_run_at.isoformat() if rule.last_run_at else None,
-            "schedule": inspect_schedule(rule)}
+            "schedule": inspect_schedule(rule),
+            "source_links": [{"id": link.id, "data_source_id": link.data_source_id,
+                              "data_source_name": link.data_source.name, "alias": link.alias,
+                              "priority": link.priority, "join_to_alias": link.join_to_alias,
+                              "left_field": link.left_field, "right_field": link.right_field,
+                              "join_type": link.join_type, "join_operator": link.join_operator}
+                             for link in rule.source_links]}
 
 
 def serialize_alarm(alarm):
@@ -121,6 +128,7 @@ def create_app(test_config=None):
     app.register_blueprint(notification_policies_bp)
     app.register_blueprint(source_sync_bp)
     app.register_blueprint(rule_lifecycle_bp)
+    app.register_blueprint(compound_rules_bp)
 
     @app.cli.command("create-admin")
     @click.option("--email", prompt=True)
