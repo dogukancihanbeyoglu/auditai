@@ -8,6 +8,8 @@ from pathlib import Path
 import click
 from flask import Flask, jsonify, render_template, request
 
+from config import build_runtime_config
+from migration_support import migrate
 from models import Alarm, AuditArea, AuditRule, DataSource, RuleExecution, User, db, utcnow
 from notifications import notification_service
 from reporting import reporting_bp
@@ -76,16 +78,20 @@ def seed_demo_data():
 def create_app(test_config=None):
     app = Flask(__name__)
     default_db = Path(app.instance_path) / "auditai.db"
-    app.config.update(SQLALCHEMY_DATABASE_URI=os.environ.get("DATABASE_URL", f"sqlite:///{default_db}"),
+    runtime_config = build_runtime_config(os.environ, default_db)
+    app.config.update(SQLALCHEMY_DATABASE_URI=runtime_config["SQLALCHEMY_DATABASE_URI"],
                       SQLALCHEMY_TRACK_MODIFICATIONS=False, JSON_SORT_KEYS=False,
-                      SECRET_KEY=os.environ.get("SESSION_SECRET") or secrets.token_hex(32),
+                      SECRET_KEY=runtime_config["SECRET_KEY"] or secrets.token_hex(32),
                       SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
-                      SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
-                      PERMANENT_SESSION_LIFETIME=timedelta(hours=8), AUTH_REQUIRED=True)
+                      SESSION_COOKIE_SECURE=runtime_config["SESSION_COOKIE_SECURE"],
+                      PERMANENT_SESSION_LIFETIME=timedelta(hours=8), AUTH_REQUIRED=True,
+                      AUDITAI_ENV=runtime_config["AUDITAI_ENV"],
+                      AUTO_CREATE_SCHEMA=runtime_config["AUTO_CREATE_SCHEMA"])
     if test_config:
         app.config.update(test_config)
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
+    migrate.init_app(app, db, render_as_batch=app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"))
     app.register_blueprint(security_bp)
     app.register_blueprint(reporting_bp)
 
@@ -262,8 +268,9 @@ def create_app(test_config=None):
         return jsonify(serialize_alarm(alarm))
 
     with app.app_context():
-        db.create_all()
-        if not app.config.get("TESTING"):
+        if app.config.get("AUTO_CREATE_SCHEMA", True):
+            db.create_all()
+        if app.config.get("AUTO_CREATE_SCHEMA", True) and not app.config.get("TESTING"):
             seed_demo_data()
     return app
 

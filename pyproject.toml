@@ -7,8 +7,10 @@ requires-python = ">=3.11"
 dependencies = [
     "flask>=3.1.1",
     "flask-sqlalchemy>=3.1.1",
+    "flask-migrate>=4.1.0",
     "gunicorn>=23.0.0",
     "openpyxl>=3.1.5",
+    "psycopg[binary]>=3.2.9",
     "sqlalchemy>=2.0.41",
     "pytest>=8.3.0",
 ]
