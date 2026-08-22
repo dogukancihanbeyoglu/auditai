@@ -2,11 +2,17 @@
 
 import operator
 import os
+import secrets
+from datetime import timedelta
 from pathlib import Path
 
+import click
 from flask import Flask, jsonify, render_template, request
 
-from models import Alarm, AuditArea, AuditRule, DataSource, db, utcnow
+from models import Alarm, AuditArea, AuditRule, DataSource, User, db, utcnow
+from notifications import notification_service
+from reporting import reporting_bp
+from security import hash_password, record_event, require_role, security_bp
 
 
 OPERATORS = {">": operator.gt, ">=": operator.ge, "<": operator.lt, "<=": operator.le, "==": operator.eq}
@@ -67,13 +73,40 @@ def create_app(test_config=None):
     app = Flask(__name__)
     default_db = Path(app.instance_path) / "auditai.db"
     app.config.update(SQLALCHEMY_DATABASE_URI=os.environ.get("DATABASE_URL", f"sqlite:///{default_db}"),
-                      SQLALCHEMY_TRACK_MODIFICATIONS=False, JSON_SORT_KEYS=False)
+                      SQLALCHEMY_TRACK_MODIFICATIONS=False, JSON_SORT_KEYS=False,
+                      SECRET_KEY=os.environ.get("SESSION_SECRET") or secrets.token_hex(32),
+                      SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                      SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
+                      PERMANENT_SESSION_LIFETIME=timedelta(hours=8), AUTH_REQUIRED=True)
     if test_config:
         app.config.update(test_config)
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
+    app.register_blueprint(security_bp)
+    app.register_blueprint(reporting_bp)
+
+    @app.cli.command("create-admin")
+    @click.option("--email", prompt=True)
+    @click.password_option(confirmation_prompt=True)
+    def create_admin(email, password):
+        """Create the initial local administrator without exposing credentials in logs."""
+        normalized_email = email.strip().lower()
+        if "@" not in normalized_email:
+            raise click.ClickException("a valid email is required")
+        if User.query.filter_by(email=normalized_email).first():
+            raise click.ClickException("user already exists")
+        try:
+            password_hash = hash_password(password)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+        db.session.add(User(email=normalized_email, password_hash=password_hash, role="admin"))
+        db.session.commit()
+        click.echo("Administrator created.")
+    from data_sources import data_sources_bp
+    app.register_blueprint(data_sources_bp)
 
     @app.get("/")
+    @require_role()
     def index():
         return render_template("admin_demo.html")
 
@@ -82,16 +115,19 @@ def create_app(test_config=None):
         return jsonify(status="ok", service="auditai", database="connected")
 
     @app.get("/api/summary")
+    @require_role()
     def summary():
         return jsonify(audit_areas=AuditArea.query.count(), data_sources=DataSource.query.count(),
                        active_rules=AuditRule.query.filter_by(is_active=True).count(),
                        open_alarms=Alarm.query.filter_by(status="open").count())
 
     @app.get("/api/audit-areas")
+    @require_role()
     def list_areas():
         return jsonify([serialize_area(item) for item in AuditArea.query.order_by(AuditArea.name).all()])
 
     @app.post("/api/audit-areas")
+    @require_role("auditor")
     def create_area():
         payload = request.get_json(silent=True) or {}
         name = str(payload.get("name", "")).strip()
@@ -101,18 +137,23 @@ def create_app(test_config=None):
             return jsonify(error="audit area already exists"), 409
         area = AuditArea(name=name, description=str(payload.get("description", "")).strip())
         db.session.add(area)
+        db.session.flush()
+        record_event("audit_area_created", "audit_area", area.id, {"name": area.name})
         db.session.commit()
         return jsonify(serialize_area(area)), 201
 
     @app.get("/api/data-sources")
+    @require_role()
     def list_sources():
         return jsonify([serialize_source(item) for item in DataSource.query.order_by(DataSource.name).all()])
 
     @app.get("/api/rules")
+    @require_role()
     def list_rules():
         return jsonify([serialize_rule(item) for item in AuditRule.query.order_by(AuditRule.id).all()])
 
     @app.post("/api/rules")
+    @require_role("auditor")
     def create_rule():
         payload = request.get_json(silent=True) or {}
         required = ("name", "field_name", "operator", "threshold_value", "severity", "audit_area_id", "data_source_id")
@@ -132,10 +173,13 @@ def create_app(test_config=None):
                          field_name=str(payload["field_name"]).strip(), operator=payload["operator"],
                          threshold_value=threshold, severity=payload["severity"], audit_area=area, data_source=source)
         db.session.add(rule)
+        db.session.flush()
+        record_event("rule_created", "audit_rule", rule.id, {"name": rule.name})
         db.session.commit()
         return jsonify(serialize_rule(rule)), 201
 
     @app.post("/api/rules/<int:rule_id>/run")
+    @require_role("auditor")
     def run_rule(rule_id):
         rule = db.get_or_404(AuditRule, rule_id)
         if not rule.is_active:
@@ -157,11 +201,17 @@ def create_app(test_config=None):
                           audit_area=rule.audit_area, data_source=rule.data_source)
             rule.trigger_count += 1
             db.session.add(alarm)
+            db.session.flush()
+            notification_service.notify(f"Audit alert: {rule.name}", alarm.message,
+                                        metadata={"alarm_id": alarm.id, "severity": alarm.severity})
+        record_event("rule_run", "audit_rule", rule.id,
+                     {"scanned_records": len(records), "matched_records": len(matches)})
         db.session.commit()
         return jsonify(rule_id=rule.id, scanned_records=len(records), matched_records=len(matches),
                        alarm_id=alarm.id if matches else None)
 
     @app.get("/api/alarms")
+    @require_role()
     def list_alarms():
         query = Alarm.query
         if request.args.get("status") in STATUSES:
@@ -169,6 +219,7 @@ def create_app(test_config=None):
         return jsonify([serialize_alarm(item) for item in query.order_by(Alarm.created_at.desc()).all()])
 
     @app.patch("/api/alarms/<int:alarm_id>/status")
+    @require_role("auditor")
     def update_alarm(alarm_id):
         alarm = db.get_or_404(Alarm, alarm_id)
         status = (request.get_json(silent=True) or {}).get("status")
@@ -176,6 +227,7 @@ def create_app(test_config=None):
             return jsonify(error="invalid status"), 400
         alarm.status = status
         alarm.updated_at = utcnow()
+        record_event("alarm_status_changed", "alarm", alarm.id, {"status": status})
         db.session.commit()
         return jsonify(serialize_alarm(alarm))
 

@@ -6,7 +6,8 @@ from models import AuditArea, AuditRule, DataSource, db
 
 @pytest.fixture()
 def app(tmp_path):
-    application = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'test.db'}"})
+    application = create_app({"TESTING": True, "AUTH_REQUIRED": False,
+                              "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'test.db'}"})
     with application.app_context():
         area = AuditArea(name="Payments", description="Payment controls")
         source = DataSource(name="Test ledger", audit_area=area,

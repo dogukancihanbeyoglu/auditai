@@ -16,6 +16,7 @@ from flask import Blueprint, current_app, jsonify, request
 from openpyxl import load_workbook
 
 from models import AuditArea, DataSource, db, utcnow
+from security import require_role
 
 
 data_sources_bp = Blueprint("data_source_ingestion", __name__)
@@ -194,6 +195,7 @@ def _save_source(area, upload, source_type, records, columns, extra=None):
 
 
 @data_sources_bp.post("/api/data-sources/upload")
+@require_role("auditor")
 def upload_tabular_source():
     try:
         upload, area, content, max_rows, max_columns = _upload_and_area()
@@ -214,6 +216,7 @@ def upload_tabular_source():
 
 
 @data_sources_bp.post("/api/data-sources/sqlite")
+@require_role("auditor")
 def upload_sqlite_source():
     try:
         upload, area, content, max_rows, max_columns = _upload_and_area()
@@ -229,6 +232,7 @@ def upload_sqlite_source():
 
 
 @data_sources_bp.get("/api/data-sources/<int:source_id>/schema")
+@require_role()
 def source_schema(source_id):
     source = db.get_or_404(DataSource, source_id)
     config = source.config or {}
@@ -238,6 +242,7 @@ def source_schema(source_id):
 
 
 @data_sources_bp.get("/api/data-sources/<int:source_id>/preview")
+@require_role()
 def source_preview(source_id):
     source = db.get_or_404(DataSource, source_id)
     try:
