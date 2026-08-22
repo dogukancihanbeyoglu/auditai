@@ -25,10 +25,11 @@ class InvalidRule(ValueError):
 class EvaluationResult:
     scanned_records: int
     matches: list[dict[str, Any]]
+    total_matches: int | None = None
 
     @property
     def matched_records(self) -> int:
-        return len(self.matches)
+        return self.total_matches if self.total_matches is not None else len(self.matches)
 
 
 def _number(value: Any) -> float:
@@ -142,8 +143,12 @@ def _validate(rule_type: str, field: str, params: Mapping[str, Any]) -> None:
         raise InvalidRule("comparison requires right_field")
 
 
-def evaluate_records(records: Iterable[Mapping[str, Any]], *, rule_type: str, field: str = "", parameters: Mapping[str, Any] | None = None, today: date | None = None) -> EvaluationResult:
+def evaluate_records(records: Iterable[Mapping[str, Any]], *, rule_type: str, field: str = "",
+                     parameters: Mapping[str, Any] | None = None, today: date | None = None,
+                     max_matches: int = 1_000) -> EvaluationResult:
     """Evaluate records without executing user-provided code or SQL."""
+    if max_matches < 1:
+        raise InvalidRule("max_matches must be positive")
     params = dict(parameters or {})
     _validate(rule_type, field, params)
     materialized = [dict(record) for record in records]
@@ -165,18 +170,22 @@ def evaluate_records(records: Iterable[Mapping[str, Any]], *, rule_type: str, fi
 
         keys = [tuple(normalize(record.get(name)) for name in fields) for record in materialized]
         counts = Counter(keys)
-        matches = [record for record, key in zip(materialized, keys) if counts[key] > 1 and not all(value is None for value in key)]
-        return EvaluationResult(len(materialized), matches)
+        all_matches = [record for record, key in zip(materialized, keys)
+                       if counts[key] > 1 and not all(value is None for value in key)]
+        return EvaluationResult(len(materialized), all_matches[:max_matches], len(all_matches))
 
     if not field:
         raise InvalidRule("field is required")
     current_date = today or datetime.now(timezone.utc).date()
     matches = []
+    total_matches = 0
     for record in materialized:
         try:
             if _match_record(record, rule_type, field, params, today=current_date):
-                matches.append(record)
+                total_matches += 1
+                if len(matches) < max_matches:
+                    matches.append(record)
         except (TypeError, ValueError, KeyError):
             # Invalid source values do not abort a full audit population.
             continue
-    return EvaluationResult(len(materialized), matches)
+    return EvaluationResult(len(materialized), matches, total_matches)

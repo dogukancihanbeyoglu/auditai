@@ -16,7 +16,7 @@ from reporting import reporting_bp
 from security import hash_password, record_event, require_role, security_bp
 from services.execution import run_rule as execute_rule
 from services.rule_engine import InvalidRule, RULE_TYPES, evaluate_records
-from services.scheduler import run_due_rules
+from services.scheduler import disable_schedule, inspect_schedule, resume_schedule, run_due_rules
 
 
 SEVERITIES = {"low", "medium", "high", "critical"}
@@ -39,6 +39,7 @@ def serialize_rule(rule):
             "threshold_value": rule.threshold_value, "severity": rule.severity,
             "rule_type": rule.rule_type, "parameters": rule.parameters,
             "schedule_interval_minutes": rule.schedule_interval_minutes,
+            "schedule_enabled": rule.schedule_enabled,
             "next_run_at": rule.next_run_at.isoformat() if rule.next_run_at else None,
             "is_active": rule.is_active, "trigger_count": rule.trigger_count,
             "audit_area_id": rule.audit_area_id, "data_source_id": rule.data_source_id,
@@ -86,7 +87,8 @@ def create_app(test_config=None):
                       SESSION_COOKIE_SECURE=runtime_config["SESSION_COOKIE_SECURE"],
                       PERMANENT_SESSION_LIFETIME=timedelta(hours=8), AUTH_REQUIRED=True,
                       AUDITAI_ENV=runtime_config["AUDITAI_ENV"],
-                      AUTO_CREATE_SCHEMA=runtime_config["AUTO_CREATE_SCHEMA"])
+                      AUTO_CREATE_SCHEMA=runtime_config["AUTO_CREATE_SCHEMA"],
+                      EVIDENCE_SAMPLE_LIMIT=int(os.environ.get("EVIDENCE_SAMPLE_LIMIT", "1000")))
     if test_config:
         app.config.update(test_config)
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
@@ -245,6 +247,35 @@ def create_app(test_config=None):
                          "started_at": item.started_at.isoformat(),
                          "finished_at": item.finished_at.isoformat() if item.finished_at else None}
                         for item in executions])
+
+    @app.get("/api/rules/<int:rule_id>/schedule")
+    @require_role("auditor")
+    def get_schedule(rule_id):
+        return jsonify(inspect_schedule(db.get_or_404(AuditRule, rule_id)))
+
+    @app.patch("/api/rules/<int:rule_id>/schedule")
+    @require_role("auditor")
+    def update_schedule(rule_id):
+        rule = db.get_or_404(AuditRule, rule_id)
+        payload = request.get_json(silent=True) or {}
+        try:
+            if payload.get("enabled") is False:
+                result = disable_schedule(rule)
+                action = "schedule_disabled"
+            elif payload.get("enabled") is True:
+                interval = payload.get("interval_minutes", rule.schedule_interval_minutes)
+                if isinstance(interval, str) and interval.isdigit():
+                    interval = int(interval)
+                result = resume_schedule(rule, interval_minutes=interval,
+                                         run_immediately=bool(payload.get("run_immediately", False)))
+                action = "schedule_resumed"
+            else:
+                return jsonify(error="enabled must be true or false"), 400
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        record_event(action, "audit_rule", rule.id, result)
+        db.session.commit()
+        return jsonify(result)
 
     @app.get("/api/alarms")
     @require_role()
