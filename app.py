@@ -9,6 +9,7 @@ import click
 from flask import Flask, jsonify, render_template, request
 
 from config import build_runtime_config
+from csrf import init_csrf
 from migration_support import migrate
 from models import Alarm, AuditArea, AuditRule, DataSource, RuleExecution, User, db, utcnow
 from notifications import notification_service
@@ -96,6 +97,7 @@ def create_app(test_config=None):
                       EVIDENCE_SAMPLE_LIMIT=int(os.environ.get("EVIDENCE_SAMPLE_LIMIT", "1000")))
     if test_config:
         app.config.update(test_config)
+    init_csrf(app)
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
     migrate.init_app(app, db, render_as_batch=app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"))

@@ -9,10 +9,17 @@ from flask import Blueprint, Response, jsonify, request
 from sqlalchemy import func
 
 from models import Alarm, AuditRule, Notification, RuleExecution
-from security import require_role
+from models import db
+from security import record_event, require_role
 
 
 reporting_bp = Blueprint("reporting", __name__)
+
+
+def _csv_safe(value):
+    """Prevent spreadsheet applications from evaluating exported cells."""
+    text = str(value if value is not None else "")
+    return "'" + text if text.lstrip().startswith(("=", "+", "-", "@")) else text
 
 
 def _date_arg(name):
@@ -56,8 +63,11 @@ def alarms_csv():
     writer = csv.writer(output)
     writer.writerow(["id", "title", "severity", "status", "rule", "audit_area", "created_at"])
     for alarm in _alarm_query().order_by(Alarm.created_at.desc()).all():
-        writer.writerow([alarm.id, alarm.title, alarm.severity, alarm.status,
-                         alarm.rule.name, alarm.audit_area.name, alarm.created_at.isoformat()])
+        writer.writerow([_csv_safe(alarm.id), _csv_safe(alarm.title), _csv_safe(alarm.severity),
+                         _csv_safe(alarm.status), _csv_safe(alarm.rule.name),
+                         _csv_safe(alarm.audit_area.name), alarm.created_at.isoformat()])
+    record_event("report_exported", "alarm_report", details={"format": "csv", "filters": dict(request.args)})
+    db.session.commit()
     return Response(output.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition": "attachment; filename=auditai-alarms.csv"})
 
