@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sign in | AuditAI</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07111f;color:#e8eef7;font:15px system-ui,sans-serif}
+    main{width:min(390px,90vw);padding:2rem;border:1px solid #24364d;border-radius:14px;background:#0f1d2e}
+    label{display:block;margin:1rem 0 .3rem;color:#9fb0c5}input,button{box-sizing:border-box;width:100%;padding:.8rem;border:1px solid #24364d;border-radius:8px;background:#091625;color:#e8eef7}
+    button{margin-top:1.2rem;background:#0e7490;border-color:#22d3ee;font-weight:700;cursor:pointer}#message{color:#fca5a5;min-height:1.5rem}
+  </style>
+</head>
+<body><main><h1>AuditAI</h1><p>Sign in to the control-monitoring workspace.</p>
+  <form id="login"><label>Email</label><input name="email" type="email" autocomplete="username" required>
+  <label>Password</label><input name="password" type="password" autocomplete="current-password" required>
+  <button>Sign in</button><p id="message" role="alert"></p></form>
+</main><script>
+document.getElementById("login").addEventListener("submit",async event=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.target));const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(values)});if(response.ok){location.href="/";return}const data=await response.json();document.getElementById("message").textContent=data.error||"Sign-in failed"});
+</script></body></html>
