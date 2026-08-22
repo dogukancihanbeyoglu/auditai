@@ -1,7 +1,8 @@
 [project]
-name = "repl-nix-workspace"
+name = "auditai"
 version = "0.1.0"
-description = "Add your description here"
+description = "Data-driven internal audit and compliance analytics platform."
+readme = "docs/README.md"
 requires-python = ">=3.11"
 dependencies = [
     "email-validator>=2.2.0",
