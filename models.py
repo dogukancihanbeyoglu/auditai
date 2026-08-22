@@ -45,6 +45,73 @@ class DataSource(db.Model):
                                      cascade="all, delete-orphan")
     quality_checks = db.relationship("QualityCheck", back_populates="data_source",
                                      cascade="all, delete-orphan")
+    sync_policy = db.relationship("DataSourceSyncPolicy", back_populates="data_source",
+                                  cascade="all, delete-orphan", uselist=False)
+    sync_runs = db.relationship("DataSourceSyncRun", back_populates="data_source",
+                                cascade="all, delete-orphan")
+    snapshots = db.relationship("DataSnapshot", back_populates="data_source",
+                                cascade="all, delete-orphan")
+
+
+class DataSourceSyncPolicy(db.Model):
+    """Full-refresh policy and short-lived source lock."""
+
+    __tablename__ = "data_source_sync_policies"
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_source_id = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=False,
+                               unique=True, index=True)
+    is_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    refresh_mode = db.Column(db.String(16), nullable=False, default="full")
+    max_records = db.Column(db.Integer, nullable=False, default=10_000)
+    lock_token = db.Column(db.String(36), nullable=True)
+    lock_until = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+    data_source = db.relationship("DataSource", back_populates="sync_policy")
+
+
+class DataSnapshot(db.Model):
+    """Immutable metadata describing an activated source snapshot."""
+
+    __tablename__ = "data_snapshots"
+    __table_args__ = (db.UniqueConstraint("data_source_id", "version",
+                                         name="uq_data_snapshot_source_version"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_source_id = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=False, index=True)
+    version = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(16), nullable=False, default="active")
+    row_count = db.Column(db.Integer, nullable=False)
+    schema_json = db.Column(db.JSON, nullable=False, default=list)
+    content_checksum = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    activated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    data_source = db.relationship("DataSource", back_populates="snapshots")
+    sync_runs = db.relationship("DataSourceSyncRun", back_populates="snapshot")
+
+
+class DataSourceSyncRun(db.Model):
+    """Persistent evidence for one idempotent source refresh attempt."""
+
+    __tablename__ = "data_source_sync_runs"
+    __table_args__ = (db.UniqueConstraint("data_source_id", "idempotency_key",
+                                         name="uq_source_sync_idempotency"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_source_id = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=False, index=True)
+    snapshot_id = db.Column(db.Integer, db.ForeignKey("data_snapshots.id"), nullable=True)
+    idempotency_key = db.Column(db.String(128), nullable=False)
+    status = db.Column(db.String(16), nullable=False, default="running")
+    records_fetched = db.Column(db.Integer, nullable=False, default=0)
+    error_message = db.Column(db.Text, nullable=True)
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    data_source = db.relationship("DataSource", back_populates="sync_runs")
+    snapshot = db.relationship("DataSnapshot", back_populates="sync_runs")
 
 
 class FieldMapping(db.Model):
