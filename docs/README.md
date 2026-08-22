@@ -1,104 +1,89 @@
 # AuditAI
 
-**Data-driven internal audit and compliance analytics platform**
+**Privacy-safe internal audit and compliance analytics portfolio prototype**
 
-AuditAI is a Flask-based prototype for managing audit areas, connecting structured data sources, defining control rules and generating risk-focused alerts. The project explores how audit expertise, data analytics and automation can work together in a privacy-safe portfolio application.
+AuditAI explores how internal-audit expertise, structured data testing and responsible automation can work together. The current version provides a lightweight Flask demonstration, a health endpoint, domain models, form definitions, synthetic-data utilities and detailed concept documentation.
 
-> Project status: active prototype. Use synthetic or anonymized data only.
+> **Status:** portfolio prototype. Use synthetic or irreversibly anonymized data only.
 
-## Why AuditAI?
+## What the project demonstrates
 
-Traditional audit testing often depends on manual sampling. AuditAI is designed to support broader and more repeatable testing through:
+- Translating audit requirements into configurable control concepts
+- Exception and threshold-based testing workflows
+- Risk-focused alert and follow-up design
+- Role and audit-domain data modelling
+- Foundations for statistical analysis and explainable anomaly detection
+- Privacy, credential and public-repository hygiene
 
-- Configurable audit areas and control rules
-- Structured data-source management
-- Exception and threshold-based testing
-- Alert generation and follow-up workflows
-- Role-based access for administrators and auditors
-- Exportable audit evidence and management reporting
-- Foundations for statistical analysis and anomaly detection
+## Current scope
+
+The executable application is intentionally lightweight: it serves a professional concept page and a machine-readable health endpoint. The broader workflow documents, models and test-data generators are architectural assets for the next implementation phase. Production authentication, route modules and live enterprise integrations are not represented as complete features.
 
 ## Technology
 
 - Python 3.11+
-- Flask, Flask-SQLAlchemy and Flask-Login
-- SQLAlchemy with SQLite for local development
-- PostgreSQL-compatible production configuration
-- pandas and openpyxl for analytical workflows
-- ReportLab and python-docx for document output
-- pytest-based test utilities
+- Flask
+- SQLAlchemy and Flask-SQLAlchemy
+- pandas and openpyxl
+- pytest utilities
+- Bootstrap 5
 
-## Project Structure
+## Project structure
 
-    auditai/
-    ├── app.py                  # Application bootstrap and configuration
-    ├── models.py               # Database models
-    ├── forms.py                # Form validation
-    ├── src/                    # Application source modules
-    ├── templates/              # User-interface templates
-    ├── tests/                  # Test and synthetic-data utilities
-    ├── docs/                   # Technical and user documentation
-    ├── pyproject.toml          # Project metadata and dependencies
-    └── requirements.txt        # pip-compatible dependencies
+```text
+auditai/
+├── app.py              # Flask application factory and health endpoint
+├── models.py           # Audit-domain data models
+├── forms.py            # Form and validation definitions
+├── src/                # Alternative application entrypoint
+├── templates/          # Portfolio demonstration interface
+├── tests/              # Tests and synthetic-data generators
+├── docs/               # Technical and usage documentation
+├── SECURITY.md         # Responsible disclosure guidance
+└── pyproject.toml      # Package metadata and dependencies
+```
 
-## Quick Start
+## Quick start
 
-### 1. Clone and create an environment
+```bash
+git clone https://github.com/dogukancihanbeyoglu/auditai.git
+cd auditai
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
 
-    git clone https://github.com/dogukancihanbeyoglu/auditai.git
-    cd auditai
-    python3.11 -m venv .venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
+On Windows, activate the environment with `.venv\Scripts\activate`.
 
-On Windows, activate the environment with .venv\Scripts\activate.
+Open [http://localhost:5000](http://localhost:5000). The health endpoint is available at [http://localhost:5000/health](http://localhost:5000/health).
 
-### 2. Configure required environment variables
+## Validation
 
-    export SESSION_SECRET="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-    export DATABASE_URL="sqlite:///auditai.db"
-    export ADMIN_EMAIL="admin@example.com"
-    export ADMIN_PASSWORD="replace-with-a-strong-password"
-    export ADMIN_USERNAME="admin"
+```bash
+python -m compileall app.py src
+python -m pytest tests/
+```
 
-SESSION_SECRET is mandatory. An initial administrator is created only when both ADMIN_EMAIL and ADMIN_PASSWORD are provided. Never commit real credentials.
+Some files in `tests/` are data-generation utilities rather than automated assertions. Review generated artifacts before publishing them.
 
-### 3. Run the application
+## Security and privacy
 
-    python app.py
-
-Open http://localhost:5000.
-
-## Testing
-
-    python -m pytest tests/
-
-The test utilities are intended to use synthetic data. Review generated files before sharing them publicly.
-
-## Security and Privacy
-
-- No default password or fallback session secret is included.
-- Debug mode is disabled unless explicitly enabled through FLASK_DEBUG.
-- Production credentials must be supplied through environment variables or a secret manager.
-- Corporate, personal and confidential audit data must never be committed.
+- No production credentials or default administrator password are included.
+- Debug mode is disabled unless explicitly enabled with `FLASK_DEBUG`.
+- Real corporate, personal and confidential audit data must never be committed.
 - Public demonstrations should use synthetic or irreversibly anonymized datasets.
-
-## Documentation
-
-Additional technical notes and usage guides are available in the [docs](docs/) directory.
+- See [SECURITY.md](../SECURITY.md) for responsible disclosure guidance.
 
 ## Roadmap
 
-- [ ] Add repeatable automated tests to CI
-- [ ] Separate application factory and configuration layers
-- [ ] Add reproducible synthetic audit datasets
+- [ ] Convert domain models into versioned database migrations
+- [ ] Implement authenticated blueprints and authorization tests
+- [ ] Add repeatable unit and integration tests to CI
+- [ ] Publish reproducible synthetic audit datasets
 - [ ] Document rule evaluation with worked examples
 - [ ] Add model-performance and explainability reporting
-- [ ] Publish a privacy-safe demonstration environment
-
-## License
-
-Licensed under the MIT License. See [docs/LICENSE](docs/LICENSE).
+- [ ] Publish a privacy-safe hosted demonstration
 
 ## Author
 
