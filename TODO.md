@@ -105,11 +105,11 @@ Uygulama sırası: **P0 veri sürekliliği → P0 alarm/bildirim operasyonları 
 ### Arayüz ve bütünleştirme — sorumlu: ana ajan
 
 - [x] Veri bağlantısı, eşleme, kural, alarm ve rapor ekranlarını yönlendirmeli akışlara dönüştürme
-- [ ] Kalite kontrollerini düzenleme, silme ve devre dışı bırakma
+- [x] Kalite kontrollerini düzenleme, silme ve devre dışı bırakma
 - [x] Bildirim politikası ve test bildirimi ayar ekranı
-- [ ] Tüm statik/dinamik arayüz metinlerini doğrudan Türkçeleştirme
-- [ ] Mobil görünüm, boş durumlar, hata mesajları ve erişilebilirlik kontrolü
-- [ ] Uçtan uca yerel senaryo: kaynak → eşleme → kalite → kural → çalışma → alarm → rapor
+- [x] Tüm statik/dinamik arayüz metinlerini Türkçeleştirme
+- [x] Mobil görünüm, boş durumlar, hata mesajları ve erişilebilirlik kontrolü
+- [x] Uçtan uca yerel senaryo: kaynak → eşleme → kalite → kural → çalışma → alarm → rapor
 
 ## Definition of done
 
