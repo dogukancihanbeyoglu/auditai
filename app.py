@@ -12,7 +12,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 def create_app() -> Flask:
     """Create and configure the lightweight portfolio application."""
     application = Flask(__name__)
-    application.config["SECRET_KEY"] = os.environ.get("SESSION_SECRET", "local-demo-only")
     application.wsgi_app = ProxyFix(application.wsgi_app, x_proto=1, x_host=1)
 
     @application.get("/")
