@@ -34,8 +34,13 @@ def test_dashboard_insights_and_source_overview_contract(client):
     insights = client.get("/api/dashboard/insights")
     assert insights.status_code == 200
     payload = insights.get_json()
-    assert len(payload["daily_alarms"]) == 7
+    assert len(payload["daily_alarms"]) == 14
     assert payload["source_types"] == {"synthetic": 1}
+    assert payload["total_records"] == 2
+    assert payload["source_summary"]["coverage_rate"] == 100.0
+    assert payload["execution_summary"]["success_rate"] == 100.0
+    assert len(payload["execution_daily"]) == 14
+    assert {item["href"] for item in payload["action_queue"]} >= {"/alerts", "/rules"}
     assert payload["top_areas"][0]["name"] == "Payments"
     source = client.get("/api/data-sources").get_json()[0]
     assert source["audit_area_name"] == "Payments"

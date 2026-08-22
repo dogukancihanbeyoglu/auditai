@@ -12,7 +12,8 @@ from config import build_runtime_config
 from csrf import init_csrf
 from alarm_review import add_alarm_activity, alarm_review_bp
 from migration_support import migrate
-from models import Alarm, AuditArea, AuditEvent, AuditRule, DataSource, RuleExecution, User, db, utcnow
+from models import (Alarm, AuditArea, AuditEvent, AuditRule, DataSource, QualityCheck,
+                    QualityCheckRun, RiskScore, RuleExecution, User, db, utcnow)
 from notification_policies import notification_policies_bp
 from reporting import reporting_bp
 from postgres_routes import postgres_bp
@@ -183,14 +184,22 @@ def create_app(test_config=None):
     def dashboard_insights():
         now = utcnow()
         alarms = Alarm.query.all()
+        sources = DataSource.query.all()
+        rules = AuditRule.query.all()
+        executions = RuleExecution.query.all()
         resolved = [item for item in alarms if item.status == "resolved"]
-        daily = []
-        for offset in range(6, -1, -1):
+        daily, execution_daily = [], []
+        for offset in range(13, -1, -1):
             day = (now - timedelta(days=offset)).date()
             daily.append({"date": day.isoformat(), "count": sum(
                 1 for item in alarms if item.created_at and item.created_at.date() == day)})
+            day_executions = [item for item in executions
+                              if item.started_at and item.started_at.date() == day]
+            execution_daily.append({"date": day.isoformat(), "total": len(day_executions),
+                                    "failed": sum(1 for item in day_executions
+                                                  if item.status == "failed")})
         source_types = {}
-        for source in DataSource.query.all():
+        for source in sources:
             source_types[source.source_type] = source_types.get(source.source_type, 0) + 1
         areas = []
         for area in AuditArea.query.all():
@@ -199,11 +208,63 @@ def create_app(test_config=None):
         areas.sort(key=lambda item: (-item["alarm_count"], item["name"].lower()))
         recent_events = AuditEvent.query.order_by(AuditEvent.created_at.desc()).limit(5).all()
         ai_rules = AuditRule.query.filter_by(rule_type="anomaly", is_active=True).count()
+        completed_executions = sum(1 for item in executions if item.status == "completed")
+        failed_executions = sum(1 for item in executions if item.status == "failed")
+        total_records = sum(len((source.config or {}).get("records", [])) for source in sources)
+        severity_breakdown = {severity: sum(1 for item in alarms if item.severity == severity)
+                              for severity in ("critical", "high", "medium", "low")}
+        status_breakdown = {status: sum(1 for item in alarms if item.status == status)
+                            for status in ("open", "acknowledged", "resolved")}
+        quality_latest = []
+        for check in QualityCheck.query.filter_by(is_active=True).all():
+            run = QualityCheckRun.query.filter_by(quality_check_id=check.id).order_by(
+                QualityCheckRun.started_at.desc()).first()
+            quality_latest.append(run.status if run else "not_run")
+        quality_breakdown = {status: quality_latest.count(status)
+                             for status in ("passed", "failed", "not_run")}
+        latest_risks = {}
+        for risk in RiskScore.query.order_by(RiskScore.calculated_at.desc()).all():
+            latest_risks.setdefault(risk.rule_id, risk)
+        risk_breakdown = {level: sum(1 for risk in latest_risks.values() if risk.level == level)
+                          for level in ("critical", "high", "medium", "low")}
+        due_schedules = sum(1 for rule in rules if rule.is_active and inspect_schedule(rule)["due"])
+        active_sources = sum(1 for source in sources if source.is_active)
+        open_critical = sum(1 for item in alarms
+                            if item.status == "open" and item.severity == "critical")
+        actions = [
+            {"label": "Kritik alarmları incele", "count": open_critical, "href": "/alerts",
+             "level": "critical", "description": "Acil değerlendirme bekleyen kritik bulgular"},
+            {"label": "Başarısız çalıştırmaları çöz", "count": failed_executions,
+             "href": "/executions", "level": "high",
+             "description": "Teknik hata ile tamamlanamayan kontrol çalıştırmaları"},
+            {"label": "Veri kalitesi sorunlarını incele", "count": quality_breakdown["failed"],
+             "href": "/data-governance", "level": "medium",
+             "description": "Son kalite sonucu başarısız olan kontroller"},
+            {"label": "Pasif kaynakları etkinleştir", "count": len(sources) - active_sources,
+             "href": "/data-sources", "level": "medium",
+             "description": "Şu anda izleme kapsamı dışında kalan kaynaklar"},
+            {"label": "Bekleyen zamanlanmış kontroller", "count": due_schedules,
+             "href": "/rules", "level": "low",
+             "description": "Çalışma zamanı gelmiş otomatik kontroller"},
+        ]
         return jsonify(
-            critical_alarms=sum(1 for item in alarms if item.status == "open" and item.severity == "critical"),
+            generated_at=now.isoformat(), total_records=total_records,
+            critical_alarms=open_critical,
             resolved_today=sum(1 for item in resolved if item.updated_at and item.updated_at.date() == now.date()),
             resolution_rate=round((len(resolved) / len(alarms) * 100), 1) if alarms else 100.0,
             anomaly_rules=ai_rules, daily_alarms=daily, source_types=source_types,
+            execution_daily=execution_daily,
+            execution_summary={"total": len(executions), "completed": completed_executions,
+                               "failed": failed_executions,
+                               "success_rate": round(completed_executions / len(executions) * 100, 1)
+                               if executions else 100.0},
+            source_summary={"total": len(sources), "active": active_sources,
+                            "inactive": len(sources) - active_sources,
+                            "coverage_rate": round(active_sources / len(sources) * 100, 1)
+                            if sources else 100.0},
+            alarm_severity=severity_breakdown, alarm_status=status_breakdown,
+            quality_summary=quality_breakdown, risk_summary=risk_breakdown,
+            action_queue=actions,
             top_areas=areas[:5], recent_events=[{
                 "id": item.id, "action": item.action, "entity_type": item.entity_type,
                 "entity_id": item.entity_id, "created_at": item.created_at.isoformat()
