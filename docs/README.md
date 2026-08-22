@@ -76,6 +76,15 @@ Run due scheduled controls once from cron or a worker:
 flask --app app run-scheduled
 ```
 
+Production deployments use versioned database migrations and the hardened WSGI entry point:
+
+```bash
+flask --app app db upgrade
+gunicorn production:app
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for PostgreSQL, Render, migration and environment requirements. A non-root `Dockerfile` is included for container deployments.
+
 ## Validation
 
 ```bash
@@ -83,7 +92,7 @@ python -m compileall app.py src
 python -m pytest tests/
 ```
 
-The test suite covers authentication and roles, audit events, CSV/XLSX/SQLite ingestion, schema discovery, safe source limits, six rule families, manual and scheduled execution, alerts, notifications and CSV reporting. CI runs on Python 3.11 and 3.12.
+The test suite covers authentication and roles, audit events, CSV/XLSX/SQLite ingestion, schema discovery, safe source limits, six rule families, bounded evidence, manual and scheduled execution, overlap locks, retry/timeout policies, migrations, production security, alerts, notifications and CSV reporting. CI runs on Python 3.11 and 3.12; a separate security workflow audits dependencies, scans secrets and builds the container.
 
 ## Security and privacy
 
