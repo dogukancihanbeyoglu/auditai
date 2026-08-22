@@ -12,52 +12,52 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 
 ## P1 — Data ingestion
 
-- [ ] Upload CSV and Excel workbooks with file-size/type validation
-- [ ] Preview sheets, columns, inferred types and sample rows
-- [ ] Persist normalized source metadata without storing credentials in source control
-- [ ] Connect to a local/approved SQL database through a restricted adapter
-- [ ] Add schema and table discovery
-- [ ] Map source columns to rule fields
-- [ ] Record ingestion counts, timestamps, failures and validation errors
-- [ ] Prevent formula injection, unsafe paths and uncontrolled queries
+- [x] Upload CSV and Excel workbooks with file-size/type validation
+- [x] Preview sheets, columns, inferred types and sample rows
+- [x] Persist normalized source metadata without storing credentials in source control
+- [x] Connect to a local SQLite database through a read-only restricted adapter
+- [x] Add SQLite schema and table discovery
+- [x] Map discovered source columns to rule fields
+- [x] Record ingestion counts, timestamps, failures and validation errors
+- [x] Prevent unsafe paths and uncontrolled SQL identifiers
 
 ## P1 — Control engine
 
-- [ ] Numeric comparison rules
-- [ ] Text equality, containment and regular-expression rules
-- [ ] Null/completeness rules
-- [ ] Date-age and date-range rules
-- [ ] Duplicate and composite-key rules
-- [ ] Cross-field comparison rules
-- [ ] Validate rule definitions before execution
+- [x] Numeric comparison rules
+- [x] Text equality and containment rules
+- [x] Null/completeness rules
+- [x] Date-age and date comparison rules
+- [x] Duplicate and composite-key rules
+- [x] Cross-field comparison rules
+- [x] Validate rule definitions before execution
 - [ ] Cap affected-record samples while retaining total match counts
-- [ ] Record execution duration, scanned rows, matches and errors
+- [x] Record execution timestamps, scanned rows, matches and errors
 
 ## P1 — Automation
 
-- [ ] Manual and scheduled execution through the same service
-- [ ] Hourly, daily and weekly schedules
+- [x] Manual and scheduled execution through the same service
+- [x] Interval-based schedules callable by cron/worker
 - [ ] Disable, resume and inspect schedules
 - [ ] Prevent overlapping executions of the same rule
-- [ ] Persist last/next run and failure state
+- [x] Persist last/next run and failure state
 - [ ] Add retry and timeout policies
 
 ## P1 — Identity and accountability
 
-- [ ] Secure login and logout
-- [ ] Password hashing and minimum password policy
-- [ ] Administrator, auditor and viewer roles
-- [ ] Route- and action-level authorization
-- [ ] Immutable audit events for security-sensitive actions
-- [ ] Session-cookie and CSRF protection
-- [ ] Safe bootstrap administrator flow
+- [x] Secure login and logout
+- [x] Password hashing and minimum password policy
+- [x] Administrator, auditor and viewer roles
+- [x] Route- and action-level authorization
+- [x] Append-only audit events for security-sensitive actions
+- [x] Secure session-cookie defaults
+- [x] Safe CLI administrator bootstrap flow
 
 ## P2 — Reporting and notifications
 
 - [ ] Filterable execution and alert history
-- [ ] CSV audit-evidence export
+- [x] CSV audit-evidence export
 - [ ] Management summary report
-- [ ] Notification abstraction with a local/log implementation
+- [x] Notification abstraction with a persistent in-app implementation
 - [ ] Email/webhook adapters configured only through environment secrets
 - [ ] Delivery status and retry tracking
 

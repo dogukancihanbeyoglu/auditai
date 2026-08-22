@@ -54,3 +54,25 @@ def test_rule_validation(client):
     response = client.post("/api/rules", json={"name": "Incomplete"})
     assert response.status_code == 400
     assert "required" in response.get_json()["error"]
+
+
+def test_advanced_rule_api_records_execution_history(client):
+    area = client.get("/api/audit-areas").get_json()[0]
+    source = client.get("/api/data-sources").get_json()[0]
+    response = client.post("/api/rules", json={
+        "name": "Amount is present", "field_name": "amount", "rule_type": "null",
+        "parameters": {"operator": "not_null"}, "severity": "medium",
+        "audit_area_id": area["id"], "data_source_id": source["id"],
+        "schedule_interval_minutes": 60,
+    })
+    assert response.status_code == 201
+    rule = response.get_json()
+    assert rule["rule_type"] == "null"
+    assert rule["schedule_interval_minutes"] == 60
+
+    result = client.post(f"/api/rules/{rule['id']}/run").get_json()
+    assert result["status"] == "completed"
+    assert result["matched_records"] == 2
+    history = client.get("/api/rule-executions").get_json()
+    assert history[0]["id"] == result["execution_id"]
+    assert history[0]["rule_name"] == "Amount is present"
