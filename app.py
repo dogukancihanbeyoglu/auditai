@@ -20,7 +20,10 @@ login_manager = LoginManager()
 
 # Create the app
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "audit-ai-secret-key-2025")
+session_secret = os.environ.get("SESSION_SECRET")
+if not session_secret:
+    raise RuntimeError("SESSION_SECRET environment variable is required")
+app.secret_key = session_secret
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Configure the database
@@ -111,24 +114,28 @@ with app.app_context():
         auditor_role.description = 'Denetçi'
         db.session.add(auditor_role)
     
-    # Create default admin user
-    admin_user = User.query.filter_by(email='admin@auditai.com').first()
-    if not admin_user:
-        admin_user = User()
-        admin_user.username = 'admin'
-        admin_user.email = 'admin@auditai.com'
-        admin_user.password_hash = generate_password_hash('admin123')
-        admin_user.role_id = admin_role.id
-        admin_user.active = True
-        admin_user.created_at = datetime.now()
-        db.session.add(admin_user)
-    else:
-        # Update existing admin user's role if needed
-        if not admin_user.role_id:
+    # Optionally bootstrap an admin account from environment variables
+    admin_email = os.environ.get("ADMIN_EMAIL")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if admin_email and admin_password:
+        admin_user = User.query.filter_by(email=admin_email).first()
+        if not admin_user:
+            admin_user = User()
+            admin_user.username = os.environ.get("ADMIN_USERNAME", "admin")
+            admin_user.email = admin_email
+            admin_user.password_hash = generate_password_hash(admin_password)
             admin_user.role_id = admin_role.id
             admin_user.active = True
+            admin_user.created_at = datetime.now()
+            db.session.add(admin_user)
+        elif not admin_user.role_id:
+            admin_user.role_id = admin_role.id
+            admin_user.active = True
+    else:
+        logging.info("Admin bootstrap skipped; set ADMIN_EMAIL and ADMIN_PASSWORD to create one.")
     
     db.session.commit()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    debug_enabled = os.environ.get("FLASK_DEBUG", "").lower() in {"1", "true", "yes"}
+    app.run(host='0.0.0.0', port=5000, debug=debug_enabled)
