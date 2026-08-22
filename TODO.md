@@ -74,6 +74,38 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 - [x] Container image and non-root runtime
 - [ ] Hosted privacy-safe demonstration
 
+## P0 — Yerel ürün tamamlama (aktif çalışma)
+
+### Veri ve eşleme — sorumlu: data_ingestion
+
+- [x] Kayıtlı alan eşlemelerini gerçek verilere uygulayan dönüşüm servisi
+- [x] Eşleme önizlemesi ve satır/alan bazlı dönüşüm hata raporu
+- [x] Kural motorunun standartlaştırılmış hedef alanları kullanması
+- [ ] SQLite/PostgreSQL bağlantı testi, tablo seçimi ve önizleme akışının tamamlanması
+
+### Kural ve otomasyon — sorumlu: rule_scheduler
+
+- [x] Kuralları düzenleme, silme, etkinleştirme ve durdurma işlemleri
+- [x] Zamanlama sıklığı ile son/sonraki çalışma bilgisinin yönetimi
+- [x] Yerel scheduler/worker süreçlerini tek komutla başlatma
+- [x] Çakışan çalışma, hata ve yeniden deneme durumlarının arayüze açılması
+
+### Alarm, risk ve raporlama — sorumlu: security_reporting
+
+- [x] Alarm sorumlusu, denetçi notları ve durum zaman çizelgesi
+- [ ] Alarmdan ilgili kaynak, kural ve çalıştırmaya izlenebilir geçiş
+- [ ] Risk skoru bileşenleri ve dönemsel karşılaştırma verisi
+- [x] Tarih/denetim alanı filtreli yönetim raporu ve denetim kanıt paketi
+
+### Arayüz ve bütünleştirme — sorumlu: ana ajan
+
+- [ ] Veri bağlantısı, eşleme, kural, alarm ve rapor ekranlarını yönlendirmeli akışlara dönüştürme
+- [ ] Kalite kontrollerini düzenleme, silme ve devre dışı bırakma
+- [ ] Bildirim politikası ve test bildirimi ayar ekranı
+- [ ] Tüm statik/dinamik arayüz metinlerini doğrudan Türkçeleştirme
+- [ ] Mobil görünüm, boş durumlar, hata mesajları ve erişilebilirlik kontrolü
+- [ ] Uçtan uca yerel senaryo: kaynak → eşleme → kalite → kural → çalışma → alarm → rapor
+
 ## Definition of done
 
 Every completed capability must include automated tests, error handling, safe defaults, updated documentation and a reproducible local verification command. Production or confidential data must never be committed.
