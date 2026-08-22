@@ -26,8 +26,24 @@ def test_health_and_dashboard(client):
     assert client.get("/health").get_json()["status"] == "ok"
     page = client.get("/")
     assert page.status_code == 200
-    assert b"Run control" in page.data
-    assert b"Add a data source" in page.data
+    assert b"Continuous control monitoring overview" in page.data
+    assert b"Data Sources" in page.data
+
+
+def test_workspace_pages_are_available(client):
+    for path, heading in {
+        "/data-sources": b"Upload and inspect controlled datasets",
+        "/rules": b"Configure and run audit controls",
+        "/executions": b"Review immutable control run history",
+        "/alerts": b"Triage exceptions and findings",
+        "/reports": b"Management-level control analytics",
+        "/notifications": b"Monitor delivery outbox status",
+        "/audit-logs": b"Review security and business events",
+        "/settings": b"Manage the local workspace",
+    }.items():
+        response = client.get(path)
+        assert response.status_code == 200
+        assert heading in response.data
 
 
 def test_create_run_and_resolve_rule(client):

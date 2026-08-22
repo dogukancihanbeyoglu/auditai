@@ -129,7 +129,16 @@ def create_app(test_config=None):
     @app.get("/")
     @require_role()
     def index():
-        return render_template("admin_demo.html")
+        return render_template("workspace.html", page="dashboard")
+
+    @app.get("/<page_name>")
+    @require_role()
+    def workspace_page(page_name):
+        pages = {"data-sources", "rules", "executions", "alerts", "reports",
+                 "notifications", "audit-logs", "settings"}
+        if page_name not in pages:
+            return jsonify(error="page not found"), 404
+        return render_template("workspace.html", page=page_name)
 
     @app.get("/health")
     def health():
