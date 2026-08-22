@@ -1,141 +1,34 @@
-import os
-import logging
-from datetime import datetime
+"""AuditAI portfolio prototype.
 
-from flask import Flask, render_template
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, current_user
-from sqlalchemy.orm import DeclarativeBase
+This repository intentionally uses synthetic or anonymized data only.
+"""
+
+import os
+
+from flask import Flask, jsonify, render_template
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-# Configure logging for production
-log_level = logging.DEBUG if os.environ.get('FLASK_ENV') == 'development' else logging.INFO
-logging.basicConfig(level=log_level)
 
-class Base(DeclarativeBase):
-    pass
+def create_app() -> Flask:
+    """Create and configure the lightweight portfolio application."""
+    application = Flask(__name__)
+    application.config["SECRET_KEY"] = os.environ.get("SESSION_SECRET", "local-demo-only")
+    application.wsgi_app = ProxyFix(application.wsgi_app, x_proto=1, x_host=1)
 
-db = SQLAlchemy(model_class=Base)
-login_manager = LoginManager()
+    @application.get("/")
+    def index():
+        return render_template("admin_demo.html")
 
-# Create the app
-app = Flask(__name__)
-session_secret = os.environ.get("SESSION_SECRET")
-if not session_secret:
-    raise RuntimeError("SESSION_SECRET environment variable is required")
-app.secret_key = session_secret
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    @application.get("/health")
+    def health():
+        return jsonify(status="ok", service="auditai")
 
-# Configure the database
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///auditai.db")
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_recycle": 300,
-    "pool_pre_ping": True,
-}
+    return application
 
-# Initialize extensions
-db.init_app(app)
-login_manager.init_app(app)
-login_manager.login_view = 'auth.login'  # type: ignore
-login_manager.login_message = 'Lütfen giriş yapın.'
-login_manager.login_message_category = 'info'
 
-@login_manager.user_loader
-def load_user(user_id):
-    from models import User
-    return User.query.get(int(user_id))
+app = create_app()
 
-# Avoid circular imports by deferring blueprint registration
-def register_blueprints():
-    from routes.auth import auth_bp
-    from routes.dashboard import dashboard_bp
-    from routes.audit_areas import audit_areas_bp
-    from routes.data_sources import data_sources_bp
-    from routes.rules import rules_bp
-    from routes.alarms import alarms_bp
-    from routes.admin import admin
-    
-    app.register_blueprint(auth_bp, url_prefix='/auth')
-    app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
-    app.register_blueprint(audit_areas_bp, url_prefix='/audit-areas')
-    app.register_blueprint(data_sources_bp, url_prefix='/data-sources')
-    app.register_blueprint(rules_bp, url_prefix='/rules')
-    app.register_blueprint(alarms_bp, url_prefix='/alarms')
-    app.register_blueprint(admin, url_prefix='/admin')
 
-# Context processor for global variables
-@app.context_processor
-def inject_globals():
-    return {
-        'current_user': current_user,
-        'now': datetime.now()
-    }
-
-# Main route
-@app.route('/')
-def index():
-    if current_user.is_authenticated:
-        return render_template('index.html')
-    return render_template('index.html')
-
-# Register blueprints and create tables in proper order
-register_blueprints()
-
-with app.app_context():
-    # Import models to ensure tables are created
-    import models
-    
-    # Create all tables
-    db.create_all()
-    
-    # Create default admin user if not exists
-    from models import User, Role
-    from werkzeug.security import generate_password_hash
-    
-    # Create default roles
-    admin_role = Role.query.filter_by(name='admin').first()
-    if not admin_role:
-        admin_role = Role()
-        admin_role.name = 'admin'
-        admin_role.description = 'Sistem Yöneticisi'
-        db.session.add(admin_role)
-    
-    user_role = Role.query.filter_by(name='user').first()
-    if not user_role:
-        user_role = Role()
-        user_role.name = 'user'
-        user_role.description = 'Standart Kullanıcı'
-        db.session.add(user_role)
-    
-    auditor_role = Role.query.filter_by(name='auditor').first()
-    if not auditor_role:
-        auditor_role = Role()
-        auditor_role.name = 'auditor'
-        auditor_role.description = 'Denetçi'
-        db.session.add(auditor_role)
-    
-    # Optionally bootstrap an admin account from environment variables
-    admin_email = os.environ.get("ADMIN_EMAIL")
-    admin_password = os.environ.get("ADMIN_PASSWORD")
-    if admin_email and admin_password:
-        admin_user = User.query.filter_by(email=admin_email).first()
-        if not admin_user:
-            admin_user = User()
-            admin_user.username = os.environ.get("ADMIN_USERNAME", "admin")
-            admin_user.email = admin_email
-            admin_user.password_hash = generate_password_hash(admin_password)
-            admin_user.role_id = admin_role.id
-            admin_user.active = True
-            admin_user.created_at = datetime.now()
-            db.session.add(admin_user)
-        elif not admin_user.role_id:
-            admin_user.role_id = admin_role.id
-            admin_user.active = True
-    else:
-        logging.info("Admin bootstrap skipped; set ADMIN_EMAIL and ADMIN_PASSWORD to create one.")
-    
-    db.session.commit()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     debug_enabled = os.environ.get("FLASK_DEBUG", "").lower() in {"1", "true", "yes"}
-    app.run(host='0.0.0.0', port=5000, debug=debug_enabled)
+    app.run(host="0.0.0.0", port=5000, debug=debug_enabled)
