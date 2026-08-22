@@ -23,6 +23,8 @@ from ops.readiness import readiness_report
 from audit_areas import audit_areas_bp
 from data_governance import data_governance_bp
 from risk_alerts import risk_alerts_bp
+from source_sync import source_sync_bp
+from services.detectors import DetectorError, get_detector
 
 
 SEVERITIES = {"low", "medium", "high", "critical"}
@@ -107,6 +109,7 @@ def create_app(test_config=None):
     app.register_blueprint(audit_areas_bp)
     app.register_blueprint(data_governance_bp)
     app.register_blueprint(risk_alerts_bp)
+    app.register_blueprint(source_sync_bp)
 
     @app.cli.command("create-admin")
     @click.option("--email", prompt=True)
@@ -187,7 +190,7 @@ def create_app(test_config=None):
         required = ("name", "severity", "audit_area_id", "data_source_id")
         if any(payload.get(field) in (None, "") for field in required):
             return jsonify(error="all rule fields are required"), 400
-        if rule_type not in RULE_TYPES or payload["severity"] not in SEVERITIES:
+        if rule_type not in RULE_TYPES | {"anomaly"} or payload["severity"] not in SEVERITIES:
             return jsonify(error="invalid rule type or severity"), 400
         area = db.session.get(AuditArea, int(payload["audit_area_id"]))
         source = db.session.get(DataSource, int(payload["data_source_id"]))
@@ -195,8 +198,20 @@ def create_app(test_config=None):
             return jsonify(error="invalid audit area or data source"), 400
         field_name = str(payload.get("field_name", "")).strip()
         try:
-            evaluate_records([], rule_type=rule_type, field=field_name, parameters=parameters)
-        except InvalidRule as exc:
+            if rule_type == "anomaly":
+                detector_name = str(parameters.get("detector", "statistical_zscore"))
+                fields = parameters.get("fields") or ([field_name] if field_name else [])
+                parameters["detector"] = detector_name
+                parameters["fields"] = list(fields)
+                get_detector(detector_name).detect(
+                    [], fields=fields,
+                    sensitivity=parameters.get("sensitivity", 0.5),
+                    confidence_threshold=parameters.get("confidence_threshold", 0.8),
+                    max_evidence=parameters.get("max_evidence", app.config["EVIDENCE_SAMPLE_LIMIT"]),
+                )
+            else:
+                evaluate_records([], rule_type=rule_type, field=field_name, parameters=parameters)
+        except (InvalidRule, DetectorError, TypeError, ValueError) as exc:
             return jsonify(error=str(exc)), 400
         operator_value = str(parameters.get("operator", "=="))
         threshold = float(parameters.get("value", 0)) if rule_type == "numeric" else 0.0
