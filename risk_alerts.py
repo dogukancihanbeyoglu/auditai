@@ -1,5 +1,7 @@
 """Explainable risk scoring and bounded alert-management API."""
 
+from datetime import datetime, time, timedelta, timezone
+
 from flask import Blueprint, jsonify, request
 
 from models import Alarm, AuditRule, DetectionFeedback, RiskScore, db, utcnow
@@ -13,6 +15,9 @@ STATUS_MULTIPLIERS = {"open": 1.0, "acknowledged": 0.65, "resolved": 0.15}
 MAX_RULES_PER_CALCULATION = 500
 MAX_BULK_ALARMS = 100
 MAX_EVIDENCE_RECORDS = 100
+MAX_TREND_POINTS = 200
+MAX_TREND_DAYS = 366
+MAX_DRILLDOWN_ALARMS = 100
 
 
 def _level(score):
@@ -55,14 +60,64 @@ def calculate_rule_risk(rule):
     )
 
 
-def _serialize_score(item):
-    return {
+def _component_comparison(current, previous):
+    if not previous:
+        return None
+    keys = sorted(set(current or {}) | set(previous or {}))
+    result = {}
+    for key in keys:
+        current_value, previous_value = (current or {}).get(key), (previous or {}).get(key)
+        if isinstance(current_value, (int, float)) and isinstance(previous_value, (int, float)):
+            result[key] = {"current": current_value, "previous": previous_value,
+                           "change": round(current_value - previous_value, 4)}
+    return result
+
+
+def _serialize_score(item, previous=None):
+    alarm_count = Alarm.query.filter_by(rule_id=item.rule_id).count()
+    alarm_ids = [row[0] for row in Alarm.query.with_entities(Alarm.id).filter_by(
+        rule_id=item.rule_id).order_by(Alarm.id).limit(MAX_DRILLDOWN_ALARMS).all()]
+    score_change = round(item.score - previous.score, 4) if previous else None
+    payload = {
         "id": item.id, "rule_id": item.rule_id, "rule_name": item.rule.name,
         "audit_area_id": item.audit_area_id, "audit_area_name": item.audit_area.name,
         "score": item.score, "level": item.level, "alarm_count": item.alarm_count,
         "open_alarm_count": item.open_alarm_count, "components": item.components,
         "explanation": item.explanation, "calculated_at": item.calculated_at.isoformat(),
+        "previous": ({"id": previous.id, "score": previous.score,
+                      "calculated_at": previous.calculated_at.isoformat()} if previous else None),
+        "score_change": score_change,
+        "score_change_percent": (round(score_change / previous.score * 100, 2)
+                                 if previous and previous.score else None),
+        "direction": ("increased" if score_change and score_change > 0 else
+                      "decreased" if score_change and score_change < 0 else
+                      "unchanged" if previous else "baseline"),
+        "component_comparison": _component_comparison(item.components, previous.components if previous else None),
+        "drill_down": {
+            "rule_id": item.rule_id, "audit_area_id": item.audit_area_id,
+            "data_source_id": item.rule.data_source_id,
+            "alarm_ids": alarm_ids, "alarm_count": alarm_count,
+            "alarm_ids_truncated": alarm_count > MAX_DRILLDOWN_ALARMS,
+        },
     }
+    return payload
+
+
+def _date_bound(name, *, end=False):
+    raw = request.args.get(name)
+    if not raw:
+        return None
+    try:
+        if len(raw) == 10:
+            parsed_date = datetime.strptime(raw, "%Y-%m-%d").date()
+            value = datetime.combine(parsed_date, time.min, tzinfo=timezone.utc)
+            return value + timedelta(days=1) if end else value
+        value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an ISO-8601 date or datetime") from exc
 
 
 def _positive_int(value, name):
@@ -89,6 +144,55 @@ def list_risk_scores():
         return jsonify(error=str(exc)), 400
     scores = query.order_by(RiskScore.calculated_at.desc(), RiskScore.id.desc()).limit(limit).all()
     return jsonify([_serialize_score(item) for item in scores])
+
+
+@risk_alerts_bp.get("/api/risk-scores/trend")
+@require_role("auditor")
+def risk_score_trend():
+    try:
+        limit = min(_positive_int(request.args.get("limit", 100), "limit"), MAX_TREND_POINTS)
+        start, end = _date_bound("from"), _date_bound("to", end=True)
+        if start and end and end <= start:
+            raise ValueError("to must be after from")
+        if start and end and end - start > timedelta(days=MAX_TREND_DAYS + 1):
+            raise ValueError(f"date range cannot exceed {MAX_TREND_DAYS} days")
+        query = RiskScore.query
+        rule_id = _positive_int(request.args["rule_id"], "rule_id") if request.args.get("rule_id") else None
+        area_id = (_positive_int(request.args["audit_area_id"], "audit_area_id")
+                   if request.args.get("audit_area_id") else None)
+        if rule_id:
+            query = query.filter_by(rule_id=rule_id)
+        if area_id:
+            query = query.filter_by(audit_area_id=area_id)
+        if start:
+            query = query.filter(RiskScore.calculated_at >= start)
+        if end:
+            query = query.filter(RiskScore.calculated_at < end)
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+    descending = query.order_by(RiskScore.calculated_at.desc(), RiskScore.id.desc()).limit(limit + 1).all()
+    truncated = len(descending) > limit
+    points = list(reversed(descending[:limit]))
+    previous_by_rule = {}
+    for item in points:
+        if item.rule_id in previous_by_rule:
+            continue
+        baseline = RiskScore.query.filter(
+            RiskScore.rule_id == item.rule_id,
+            ((RiskScore.calculated_at < item.calculated_at) |
+             ((RiskScore.calculated_at == item.calculated_at) & (RiskScore.id < item.id))),
+        ).order_by(RiskScore.calculated_at.desc(), RiskScore.id.desc()).first()
+        previous_by_rule[item.rule_id] = baseline
+    serialized = []
+    for item in points:
+        previous = previous_by_rule.get(item.rule_id)
+        serialized.append(_serialize_score(item, previous=previous))
+        previous_by_rule[item.rule_id] = item
+    return jsonify({
+        "items": serialized, "count": len(serialized), "limit": limit, "truncated": truncated,
+        "filters": {"from": request.args.get("from"), "to": request.args.get("to"),
+                    "rule_id": rule_id, "audit_area_id": area_id},
+    })
 
 
 @risk_alerts_bp.post("/api/risk-scores/calculate")
