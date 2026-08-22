@@ -13,6 +13,7 @@ from migration_support import migrate
 from models import Alarm, AuditArea, AuditRule, DataSource, RuleExecution, User, db, utcnow
 from notifications import notification_service
 from reporting import reporting_bp
+from postgres_routes import postgres_bp
 from security import hash_password, record_event, require_role, security_bp
 from services.execution import run_rule as execute_rule
 from services.rule_engine import InvalidRule, RULE_TYPES, evaluate_records
@@ -96,6 +97,7 @@ def create_app(test_config=None):
     migrate.init_app(app, db, render_as_batch=app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"))
     app.register_blueprint(security_bp)
     app.register_blueprint(reporting_bp)
+    app.register_blueprint(postgres_bp)
 
     @app.cli.command("create-admin")
     @click.option("--email", prompt=True)
