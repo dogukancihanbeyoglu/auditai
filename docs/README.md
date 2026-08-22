@@ -2,7 +2,7 @@
 
 **Privacy-safe internal audit and compliance analytics portfolio prototype**
 
-AuditAI explores how internal-audit expertise, structured data testing and responsible automation can work together. The current version provides a functional Flask application, persistent audit-domain models, a deterministic rule engine, synthetic records, alert workflows and automated tests.
+AuditAI explores how internal-audit expertise, structured data testing and responsible automation can work together. It provides a functional Flask application with authenticated roles, bounded tabular-data ingestion, a deterministic rule engine, execution history, scheduled-run support, alert workflows, audit events and automated tests.
 
 > **Status:** portfolio prototype. Use synthetic or irreversibly anonymized data only.
 
@@ -17,13 +17,15 @@ AuditAI explores how internal-audit expertise, structured data testing and respo
 
 ## Functional workflow
 
-1. Review the seeded audit area and synthetic invoice ledger.
-2. Create threshold-based control rules from the dashboard.
-3. Run a control against the stored source records.
-4. Inspect affected records in each generated alert.
-5. Acknowledge and resolve alerts while dashboard metrics update.
+1. Create an administrator and sign in as an authorized user.
+2. Upload a bounded CSV/XLSX file or read a local SQLite table.
+3. Inspect discovered columns, types and sample records.
+4. Create numeric, text, date, null, duplicate or cross-field controls.
+5. Run controls manually or invoke the deterministic scheduled-run command.
+6. Inspect execution evidence and affected records.
+7. Acknowledge or resolve alerts and export alert evidence as CSV.
 
-The application persists state in SQLite and exposes the same workflow through JSON endpoints under `/api`. Authentication, scheduled execution and live enterprise integrations remain roadmap items and are not presented as completed features.
+The application persists state in SQLite and exposes the workflow through JSON endpoints under `/api`. Remote enterprise connectors, migrations, background-worker orchestration and production deployment remain roadmap items and are not presented as completed features.
 
 ## Technology
 
@@ -39,6 +41,10 @@ The application persists state in SQLite and exposes the same workflow through J
 auditai/
 ├── app.py              # Flask application factory and health endpoint
 ├── models.py           # Audit-domain data models
+├── data_sources.py     # Bounded CSV/XLSX/SQLite ingestion
+├── security.py         # Authentication, RBAC and audit events
+├── reporting.py        # Evidence exports and notification APIs
+├── services/           # Rule evaluation, execution and scheduling
 ├── src/                # Alternative application entrypoint
 ├── templates/          # Portfolio demonstration interface
 ├── tests/              # Tests and synthetic-data generators
@@ -55,12 +61,20 @@ cd auditai
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+export SESSION_SECRET="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+flask --app app create-admin
 python app.py
 ```
 
 On Windows, activate the environment with `.venv\Scripts\activate`.
 
 Open [http://localhost:5000](http://localhost:5000). The health endpoint is available at [http://localhost:5000/health](http://localhost:5000/health).
+
+Run due scheduled controls once from cron or a worker:
+
+```bash
+flask --app app run-scheduled
+```
 
 ## Validation
 
@@ -69,7 +83,7 @@ python -m compileall app.py src
 python -m pytest tests/
 ```
 
-The integration suite verifies the dashboard, health check, rule creation, rule execution, alert creation, affected records and alert resolution. Some additional files in `tests/` are synthetic-data generators rather than automated assertions.
+The test suite covers authentication and roles, audit events, CSV/XLSX/SQLite ingestion, schema discovery, safe source limits, six rule families, manual and scheduled execution, alerts, notifications and CSV reporting. CI runs on Python 3.11 and 3.12.
 
 ## Security and privacy
 
@@ -81,13 +95,7 @@ The integration suite verifies the dashboard, health check, rule creation, rule 
 
 ## Roadmap
 
-- [ ] Convert domain models into versioned database migrations
-- [ ] Implement authenticated blueprints and authorization tests
-- [ ] Add repeatable unit and integration tests to CI
-- [ ] Publish reproducible synthetic audit datasets
-- [ ] Document rule evaluation with worked examples
-- [ ] Add model-performance and explainability reporting
-- [ ] Publish a privacy-safe hosted demonstration
+See [TODO.md](../TODO.md) for completed capabilities, remaining production work and the definition of done.
 
 ## Author
 
