@@ -81,6 +81,17 @@ Run due scheduled controls once from cron or a worker:
 flask --app app run-scheduled
 ```
 
+For continuous local scheduling, run the dedicated worker as a separate process:
+
+```bash
+python worker.py --poll-seconds 30
+```
+
+The worker is the single scheduler process; do not start one scheduler inside
+each Flask/Gunicorn web worker. Stop it with `Ctrl+C`. Use `python worker.py
+--once` for a one-cycle smoke test. Schedule state, last execution and next run
+are available through `GET /api/rules/<id>/schedule` and rule detail responses.
+
 Production deployments use versioned database migrations and the hardened WSGI entry point:
 
 ```bash

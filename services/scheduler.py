@@ -32,8 +32,13 @@ def inspect_schedule(rule: AuditRule, *, now=None) -> dict:
     now = _naive_utc(now or utcnow())
     next_run = _naive_utc(rule.next_run_at) if rule.next_run_at else None
     lock_until = _naive_utc(rule.execution_lock_until) if rule.execution_lock_until else None
+    latest = RuleExecution.query.filter_by(rule_id=rule.id).order_by(
+        RuleExecution.started_at.desc(), RuleExecution.id.desc()).first()
+    latest_scheduled = RuleExecution.query.filter_by(rule_id=rule.id, trigger="scheduled").order_by(
+        RuleExecution.started_at.desc(), RuleExecution.id.desc()).first()
     return {
         "rule_id": rule.id,
+        "rule_active": rule.is_active,
         "enabled": bool(rule.schedule_enabled and rule.schedule_interval_minutes),
         "interval_minutes": rule.schedule_interval_minutes,
         "next_run_at": rule.next_run_at.isoformat() if rule.next_run_at else None,
@@ -44,6 +49,21 @@ def inspect_schedule(rule: AuditRule, *, now=None) -> dict:
         "retry_limit": rule.schedule_retry_limit,
         "retry_delay_minutes": rule.retry_delay_minutes,
         "consecutive_failures": rule.consecutive_failures,
+        "last_execution": _execution_summary(latest),
+        "last_scheduled_execution": _execution_summary(latest_scheduled),
+    }
+
+
+def _execution_summary(execution):
+    if not execution:
+        return None
+    return {
+        "id": execution.id, "status": execution.status, "trigger": execution.trigger,
+        "attempt": execution.attempt, "scanned_records": execution.scanned_records,
+        "matched_records": execution.matched_records,
+        "started_at": execution.started_at.isoformat(),
+        "finished_at": execution.finished_at.isoformat() if execution.finished_at else None,
+        "error_message": execution.error_message,
     }
 
 

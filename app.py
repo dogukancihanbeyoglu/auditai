@@ -25,6 +25,7 @@ from data_governance import data_governance_bp
 from risk_alerts import risk_alerts_bp
 from source_sync import source_sync_bp
 from services.detectors import DetectorError, get_detector
+from rule_lifecycle import rule_lifecycle_bp
 
 
 SEVERITIES = {"low", "medium", "high", "critical"}
@@ -55,7 +56,8 @@ def serialize_rule(rule):
             "next_run_at": rule.next_run_at.isoformat() if rule.next_run_at else None,
             "is_active": rule.is_active, "trigger_count": rule.trigger_count,
             "audit_area_id": rule.audit_area_id, "data_source_id": rule.data_source_id,
-            "last_run_at": rule.last_run_at.isoformat() if rule.last_run_at else None}
+            "last_run_at": rule.last_run_at.isoformat() if rule.last_run_at else None,
+            "schedule": inspect_schedule(rule)}
 
 
 def serialize_alarm(alarm):
@@ -114,6 +116,7 @@ def create_app(test_config=None):
     app.register_blueprint(data_governance_bp)
     app.register_blueprint(risk_alerts_bp)
     app.register_blueprint(source_sync_bp)
+    app.register_blueprint(rule_lifecycle_bp)
 
     @app.cli.command("create-admin")
     @click.option("--email", prompt=True)
