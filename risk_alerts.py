@@ -105,7 +105,9 @@ def calculate_risk_scores():
     rules = query.order_by(AuditRule.id).limit(MAX_RULES_PER_CALCULATION + 1).all()
     if len(rules) > MAX_RULES_PER_CALCULATION:
         return jsonify(error=f"calculation is limited to {MAX_RULES_PER_CALCULATION} rules"), 413
-    scores = [calculate_rule_risk(rule) for rule in rules]
+    # Relationship reads for later rules must not autoflush earlier, not-yet-added score snapshots.
+    with db.session.no_autoflush:
+        scores = [calculate_rule_risk(rule) for rule in rules]
     db.session.add_all(scores)
     db.session.flush()
     record_event("risk_scores_calculated", "risk_score", details={"count": len(scores)})

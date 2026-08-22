@@ -2,7 +2,6 @@ import pytest
 
 from app import create_app
 from models import Alarm, AuditArea, AuditEvent, AuditRule, DataSource, RiskScore, User, db
-from risk_alerts import risk_alerts_bp
 from security import hash_password
 
 
@@ -10,7 +9,6 @@ from security import hash_password
 def app(tmp_path):
     application = create_app({"TESTING": True, "SECRET_KEY": "risk-tests",
                               "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'risk.db'}"})
-    application.register_blueprint(risk_alerts_bp)
     with application.app_context():
         area = AuditArea(name="Payments")
         source = DataSource(name="Ledger", audit_area=area, config={"records": []})

@@ -33,9 +33,12 @@ def test_health_and_dashboard(client):
 def test_workspace_pages_are_available(client):
     for path, heading in {
         "/data-sources": b"Upload and inspect controlled datasets",
+        "/audit-areas": b"Structure and manage the audit universe",
+        "/data-governance": b"Map fields and execute persistent data-quality controls",
         "/rules": b"Configure and run audit controls",
         "/executions": b"Review immutable control run history",
-        "/alerts": b"Triage exceptions and findings",
+        "/alerts": b"Triage exceptions, inspect evidence and run bulk actions",
+        "/risk-scores": b"Calculate transparent risk from persisted control evidence",
         "/reports": b"Management-level control analytics",
         "/notifications": b"Monitor delivery outbox status",
         "/audit-logs": b"Review security and business events",

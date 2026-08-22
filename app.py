@@ -19,6 +19,9 @@ from services.execution import run_rule as execute_rule
 from services.rule_engine import InvalidRule, RULE_TYPES, evaluate_records
 from services.scheduler import disable_schedule, inspect_schedule, resume_schedule, run_due_rules
 from ops.readiness import readiness_report
+from audit_areas import audit_areas_bp
+from data_governance import data_governance_bp
+from risk_alerts import risk_alerts_bp
 
 
 SEVERITIES = {"low", "medium", "high", "critical"}
@@ -99,6 +102,9 @@ def create_app(test_config=None):
     app.register_blueprint(security_bp)
     app.register_blueprint(reporting_bp)
     app.register_blueprint(postgres_bp)
+    app.register_blueprint(audit_areas_bp)
+    app.register_blueprint(data_governance_bp)
+    app.register_blueprint(risk_alerts_bp)
 
     @app.cli.command("create-admin")
     @click.option("--email", prompt=True)
@@ -134,7 +140,8 @@ def create_app(test_config=None):
     @app.get("/<page_name>")
     @require_role()
     def workspace_page(page_name):
-        pages = {"data-sources", "rules", "executions", "alerts", "reports",
+        pages = {"audit-areas", "data-sources", "data-governance", "rules",
+                 "executions", "alerts", "risk-scores", "reports",
                  "notifications", "audit-logs", "settings"}
         if page_name not in pages:
             return jsonify(error="page not found"), 404
@@ -155,27 +162,6 @@ def create_app(test_config=None):
         return jsonify(audit_areas=AuditArea.query.count(), data_sources=DataSource.query.count(),
                        active_rules=AuditRule.query.filter_by(is_active=True).count(),
                        open_alarms=Alarm.query.filter_by(status="open").count())
-
-    @app.get("/api/audit-areas")
-    @require_role()
-    def list_areas():
-        return jsonify([serialize_area(item) for item in AuditArea.query.order_by(AuditArea.name).all()])
-
-    @app.post("/api/audit-areas")
-    @require_role("auditor")
-    def create_area():
-        payload = request.get_json(silent=True) or {}
-        name = str(payload.get("name", "")).strip()
-        if not name:
-            return jsonify(error="name is required"), 400
-        if AuditArea.query.filter_by(name=name).first():
-            return jsonify(error="audit area already exists"), 409
-        area = AuditArea(name=name, description=str(payload.get("description", "")).strip())
-        db.session.add(area)
-        db.session.flush()
-        record_event("audit_area_created", "audit_area", area.id, {"name": area.name})
-        db.session.commit()
-        return jsonify(serialize_area(area)), 201
 
     @app.get("/api/data-sources")
     @require_role()

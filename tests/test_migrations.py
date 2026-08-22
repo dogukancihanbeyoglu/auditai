@@ -13,7 +13,8 @@ def test_initial_migration_upgrades_and_downgrades_empty_database(tmp_path):
         upgrade(directory="migrations")
         tables = set(inspect(db.engine).get_table_names())
         assert {"audit_areas", "data_sources", "audit_rules", "rule_executions", "alarms",
-                "users", "audit_events", "notifications"}.issubset(tables)
+                "users", "audit_events", "notifications", "risk_scores", "field_mappings",
+                "quality_checks", "quality_check_runs"}.issubset(tables)
 
         downgrade(directory="migrations", revision="base")
         assert set(inspect(db.engine).get_table_names()) == {"alembic_version"}
