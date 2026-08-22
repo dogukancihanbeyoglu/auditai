@@ -30,17 +30,17 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 - [x] Duplicate and composite-key rules
 - [x] Cross-field comparison rules
 - [x] Validate rule definitions before execution
-- [ ] Cap affected-record samples while retaining total match counts
+- [x] Cap affected-record samples while retaining total match counts
 - [x] Record execution timestamps, scanned rows, matches and errors
 
 ## P1 — Automation
 
 - [x] Manual and scheduled execution through the same service
 - [x] Interval-based schedules callable by cron/worker
-- [ ] Disable, resume and inspect schedules
-- [ ] Prevent overlapping executions of the same rule
+- [x] Disable, resume and inspect schedules through the scheduler service
+- [x] Prevent overlapping executions of the same rule
 - [x] Persist last/next run and failure state
-- [ ] Add retry and timeout policies
+- [x] Add retry and timeout policies
 
 ## P1 — Identity and accountability
 
@@ -63,14 +63,14 @@ This roadmap tracks the path from the functional portfolio prototype to a deploy
 
 ## P2 — Production readiness
 
-- [ ] Database migrations
-- [ ] PostgreSQL deployment profile
-- [ ] Structured application logging
-- [ ] Rate limiting and request-size limits
-- [ ] Dependency and secret scanning
+- [x] Database migrations
+- [x] PostgreSQL deployment profile
+- [x] Structured application logging
+- [x] Rate limiting and request-size limits
+- [x] Dependency and secret scanning
 - [ ] Backup and recovery runbook
 - [ ] Load and large-dataset tests
-- [ ] Container image and non-root runtime
+- [x] Container image and non-root runtime
 - [ ] Hosted privacy-safe demonstration
 
 ## Definition of done
