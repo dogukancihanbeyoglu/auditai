@@ -34,7 +34,7 @@ fetch. On failure the previous records and active snapshot remain unchanged,
 the run is marked failed with a redacted message, and the lock is released.
 
 PostgreSQL sources are fetched again through their environment-only connection
-profile. Synthetic and file/SQLite sources can currently be re-snapshotted from
-their persisted records because original uploaded files are intentionally not
-retained. A later file-object-store adapter can implement true file re-fetching
-without changing the connector contract.
+profile. CSV, XLSX and SQLite sources are reparsed from their active immutable,
+checksum-addressed `DataSourceArtifact`; mutable snapshot JSON is not treated as
+the refresh origin. Synthetic sources intentionally re-snapshot their persisted
+records.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import math
 import os
@@ -14,9 +15,11 @@ from typing import Any
 
 from flask import Blueprint, current_app, jsonify, request
 from openpyxl import load_workbook
+from sqlalchemy import func
+from werkzeug.utils import secure_filename
 
-from models import AuditArea, DataSource, db, utcnow
-from security import require_role
+from models import AuditArea, DataSnapshot, DataSource, DataSourceArtifact, db, utcnow
+from security import record_event, require_role
 
 
 data_sources_bp = Blueprint("data_source_ingestion", __name__)
@@ -181,17 +184,30 @@ def _upload_and_area():
     return upload, area, content, max_rows, max_columns
 
 
-def _save_source(area, upload, source_type, records, columns, extra=None):
+def _save_source(area, upload, source_type, content, records, columns, extra=None):
     name = request.form.get("name", "").strip() or Path(upload.filename).stem
     if not name:
         raise IngestionError("source name is required")
-    config = {"records": records, "columns": columns, "original_filename": Path(upload.filename).name}
+    filename = secure_filename(Path(upload.filename).name) or f"source{Path(upload.filename).suffix.lower()}"
+    checksum = hashlib.sha256(content).hexdigest()
+    config = {"records": records, "columns": columns, "original_filename": filename}
     config.update(extra or {})
     source = DataSource(name=name[:128], source_type=source_type, config=config,
                         audit_area=area, last_sync=utcnow())
     db.session.add(source)
+    db.session.flush()
+    artifact = DataSourceArtifact(data_source=source, version=1, original_filename=filename,
+        media_type=upload.mimetype or "application/octet-stream", byte_size=len(content),
+        content_checksum=checksum, content=content)
+    snapshot = DataSnapshot(data_source=source, version=1, status="active", row_count=len(records),
+                            schema_json=columns, content_checksum=checksum)
+    db.session.add_all([artifact, snapshot])
+    db.session.flush()
+    source.config = {**config, "active_artifact_id": artifact.id, "active_snapshot_id": snapshot.id}
+    record_event("data_source_uploaded", "data_source", source.id,
+                 {"source_type": source_type, "artifact_version": 1, "checksum": checksum})
     db.session.commit()
-    return source
+    return source, artifact, snapshot
 
 
 @data_sources_bp.post("/api/data-sources/upload")
@@ -204,13 +220,16 @@ def upload_tabular_source():
             raise IngestionError("only CSV and XLSX files are accepted")
         if extension == ".csv":
             records, columns = parse_csv(content, max_rows, max_columns)
-            source = _save_source(area, upload, "csv", records, columns)
+            source, artifact, snapshot = _save_source(area, upload, "csv", content, records, columns)
         else:
             records, columns, sheet = parse_xlsx(content, max_rows, max_columns,
                                                   request.form.get("sheet_name") or None)
-            source = _save_source(area, upload, "xlsx", records, columns, {"sheet_name": sheet})
+            source, artifact, snapshot = _save_source(area, upload, "xlsx", content, records, columns,
+                                                      {"sheet_name": sheet})
         return jsonify(source_id=source.id, name=source.name, source_type=source.source_type,
-                       record_count=len(records), columns=columns, preview=records[:10]), 201
+                       record_count=len(records), columns=columns, preview=records[:10],
+                       artifact_version=artifact.version, checksum=artifact.content_checksum,
+                       snapshot_id=snapshot.id), 201
     except IngestionError as exc:
         return jsonify(error=str(exc)), 400
 
@@ -222,11 +241,12 @@ def upload_sqlite_source():
         upload, area, content, max_rows, max_columns = _upload_and_area()
         records, columns, table, tables = parse_sqlite(content, request.form.get("table_name") or None,
                                                         max_rows, max_columns)
-        source = _save_source(area, upload, "sqlite", records, columns,
+        source, artifact, snapshot = _save_source(area, upload, "sqlite", content, records, columns,
                               {"table_name": table, "available_tables": tables})
         return jsonify(source_id=source.id, name=source.name, source_type="sqlite", table_name=table,
                        available_tables=tables, record_count=len(records), columns=columns,
-                       preview=records[:10]), 201
+                       preview=records[:10], artifact_version=artifact.version,
+                       checksum=artifact.content_checksum, snapshot_id=snapshot.id), 201
     except IngestionError as exc:
         return jsonify(error=str(exc)), 400
 
@@ -251,3 +271,108 @@ def source_preview(source_id):
         return jsonify(error="limit must be an integer"), 400
     records = (source.config or {}).get("records", [])
     return jsonify(source_id=source.id, total_records=len(records), records=records[:limit])
+
+
+@data_sources_bp.post("/api/data-sources/<int:source_id>/reload")
+@require_role("auditor")
+def reload_tabular_source(source_id):
+    source = db.get_or_404(DataSource, source_id)
+    if source.source_type not in {"csv", "xlsx"}:
+        return jsonify(error="only CSV and XLSX sources support file reload"), 409
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify(error="file is required"), 400
+    max_bytes, max_rows, max_columns = _limits()
+    content = upload.stream.read(max_bytes + 1)
+    if not content or len(content) > max_bytes:
+        return jsonify(error="file is empty or exceeds the configured byte limit"), 400
+    extension = Path(upload.filename).suffix.lower()
+    if extension != f".{source.source_type}":
+        return jsonify(error=f"a {source.source_type.upper()} file is required"), 400
+    checksum = hashlib.sha256(content).hexdigest()
+    if DataSourceArtifact.query.filter_by(data_source_id=source.id,
+                                          content_checksum=checksum).first():
+        return jsonify(error="this exact file version was already uploaded"), 409
+    try:
+        extra = {}
+        if source.source_type == "csv":
+            records, columns = parse_csv(content, max_rows, max_columns)
+        else:
+            records, columns, sheet = parse_xlsx(content, max_rows, max_columns,
+                                                  request.form.get("sheet_name") or None)
+            extra["sheet_name"] = sheet
+        artifact_version = (db.session.query(func.coalesce(func.max(DataSourceArtifact.version), 0))
+                            .filter(DataSourceArtifact.data_source_id == source.id).scalar() + 1)
+        snapshot_version = (db.session.query(func.coalesce(func.max(DataSnapshot.version), 0))
+                            .filter(DataSnapshot.data_source_id == source.id).scalar() + 1)
+        filename = secure_filename(Path(upload.filename).name) or f"source.{source.source_type}"
+        artifact = DataSourceArtifact(data_source=source, version=artifact_version,
+            original_filename=filename, media_type=upload.mimetype or "application/octet-stream",
+            byte_size=len(content), content_checksum=checksum, content=content)
+        db.session.add(artifact)
+        DataSnapshot.query.filter_by(data_source_id=source.id, status="active").update(
+            {DataSnapshot.status: "superseded"}, synchronize_session=False)
+        snapshot = DataSnapshot(data_source=source, version=snapshot_version, status="active",
+            row_count=len(records), schema_json=columns, content_checksum=checksum)
+        db.session.add(snapshot)
+        db.session.flush()
+        source.config = {**dict(source.config or {}), "records": records, "columns": columns,
+                         "original_filename": filename, "active_artifact_id": artifact.id,
+                         "active_snapshot_id": snapshot.id, **extra}
+        source.last_sync = utcnow()
+        record_event("data_source_reloaded", "data_source", source.id,
+                     {"artifact_version": artifact_version, "checksum": checksum,
+                      "snapshot_version": snapshot_version})
+        db.session.commit()
+        return jsonify(source_id=source.id, record_count=len(records), columns=columns,
+                       preview=records[:10], artifact_version=artifact_version,
+                       checksum=checksum, snapshot_id=snapshot.id), 201
+    except IngestionError as exc:
+        db.session.rollback()
+        return jsonify(error=str(exc)), 400
+
+
+def _sqlite_probe():
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        raise IngestionError("file is required")
+    max_bytes, max_rows, max_columns = _limits()
+    content = upload.stream.read(max_bytes + 1)
+    if not content or len(content) > max_bytes:
+        raise IngestionError("file is empty or exceeds the configured byte limit")
+    records, columns, table, tables = parse_sqlite(
+        content, request.form.get("table_name") or None, max_rows, max_columns)
+    return records, columns, table, tables
+
+
+@data_sources_bp.post("/api/connectors/sqlite/test")
+@require_role()
+def test_sqlite_connection():
+    try:
+        records, _, table, tables = _sqlite_probe()
+        return jsonify(status="ok", table_count=len(tables), selected_table=table,
+                       selected_record_count=len(records))
+    except IngestionError as exc:
+        return jsonify(error=str(exc)), 400
+
+
+@data_sources_bp.post("/api/connectors/sqlite/tables")
+@require_role()
+def discover_sqlite_tables():
+    try:
+        _, _, _, tables = _sqlite_probe()
+        return jsonify(tables=tables)
+    except IngestionError as exc:
+        return jsonify(error=str(exc)), 400
+
+
+@data_sources_bp.post("/api/connectors/sqlite/preview")
+@require_role()
+def preview_sqlite_table():
+    try:
+        records, columns, table, tables = _sqlite_probe()
+        limit = min(max(int(request.form.get("limit", 10)), 1), 100)
+        return jsonify(table=table, available_tables=tables, columns=columns,
+                       total_records=len(records), records=records[:limit])
+    except (IngestionError, ValueError) as exc:
+        return jsonify(error=str(exc)), 400

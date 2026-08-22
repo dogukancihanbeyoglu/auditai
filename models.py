@@ -51,6 +51,28 @@ class DataSource(db.Model):
                                 cascade="all, delete-orphan")
     snapshots = db.relationship("DataSnapshot", back_populates="data_source",
                                 cascade="all, delete-orphan")
+    artifacts = db.relationship("DataSourceArtifact", back_populates="data_source",
+                                cascade="all, delete-orphan")
+
+
+class DataSourceArtifact(db.Model):
+    """Versioned uploaded source bytes; no user-controlled filesystem path is persisted."""
+
+    __tablename__ = "data_source_artifacts"
+    __table_args__ = (db.UniqueConstraint("data_source_id", "version",
+                                         name="uq_source_artifact_version"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_source_id = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=False, index=True)
+    version = db.Column(db.Integer, nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    media_type = db.Column(db.String(128), nullable=False)
+    byte_size = db.Column(db.Integer, nullable=False)
+    content_checksum = db.Column(db.String(64), nullable=False, index=True)
+    content = db.Column(db.LargeBinary, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    data_source = db.relationship("DataSource", back_populates="artifacts")
 
 
 class DataSourceSyncPolicy(db.Model):

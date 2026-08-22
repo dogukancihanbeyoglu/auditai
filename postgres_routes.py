@@ -15,6 +15,16 @@ def _connector() -> PostgresConnector:
     return factory()
 
 
+@postgres_bp.get("/api/connectors/postgresql/<profile>/test")
+@require_role()
+def test_postgres_connection(profile):
+    try:
+        tables = _connector().discover_tables(profile)
+        return jsonify(status="ok", profile=profile, table_count=len(tables))
+    except ConnectorError as exc:
+        return jsonify(error=str(exc)), 400
+
+
 @postgres_bp.get("/api/connectors/postgresql/<profile>/tables")
 @require_role()
 def discover_postgres_tables(profile):
@@ -35,6 +45,24 @@ def discover_postgres_columns(profile):
         return jsonify(profile=profile, schema=schema_name, table=table_name,
                        columns=_connector().discover_columns(profile, schema_name, table_name))
     except ConnectorError as exc:
+        return jsonify(error=str(exc)), 400
+
+
+@postgres_bp.get("/api/connectors/postgresql/<profile>/preview")
+@require_role()
+def preview_postgres_table(profile):
+    schema_name = request.args.get("schema", "")
+    table_name = request.args.get("table", "")
+    if not schema_name or not table_name:
+        return jsonify(error="schema and table are required"), 400
+    try:
+        limit = min(max(int(request.args.get("limit", 10)), 1), 100)
+        connector = _connector()
+        records, truncated = connector.select_rows(profile, schema_name, table_name, limit)
+        columns = connector.discover_columns(profile, schema_name, table_name)
+        return jsonify(profile=profile, schema=schema_name, table=table_name,
+                       columns=columns, records=records, truncated=truncated)
+    except (ConnectorError, TypeError, ValueError) as exc:
         return jsonify(error=str(exc)), 400
 
 

@@ -31,12 +31,20 @@ def app(tmp_path):
 
 def test_discovery_and_import_never_persist_dsn(app):
     client = app.test_client()
+    tested = client.get("/api/connectors/postgresql/finance/test")
+    assert tested.status_code == 200
+    assert tested.get_json()["table_count"] == 1
     assert client.get("/api/connectors/postgresql/finance/tables").get_json()["tables"] == [
         {"schema": "public", "table": "invoices"}]
     columns = client.get(
         "/api/connectors/postgresql/finance/columns?schema=public&table=invoices"
     ).get_json()["columns"]
     assert [item["name"] for item in columns] == ["id", "amount"]
+    preview = client.get(
+        "/api/connectors/postgresql/finance/preview?schema=public&table=invoices&limit=1"
+    )
+    assert preview.status_code == 200
+    assert preview.get_json()["records"][0] == {"id": 1, "amount": 125.0}
 
     response = client.post("/api/data-sources/postgresql", json={"profile": "finance",
         "schema": "public", "table": "invoices", "audit_area_id": 1, "limit": 100})

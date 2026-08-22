@@ -11,6 +11,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
 from connectors.base import FetchResult, SnapshotConnector, SourceFetchError
+from connectors.files import ArtifactRefreshConnector
 from models import (DataSnapshot, DataSource, DataSourceSyncPolicy, DataSourceSyncRun,
                     db, utcnow)
 from postgres_connector import ConnectorError, PostgresConnector
@@ -84,8 +85,8 @@ def _checksum(result: FetchResult) -> str:
 class FullRefreshService:
     def __init__(self, connectors=None, lock_seconds: int = 300):
         self.connectors = connectors or {
-            "synthetic": SnapshotConnector(), "csv": SnapshotConnector(),
-            "xlsx": SnapshotConnector(), "sqlite": SnapshotConnector(),
+            "synthetic": SnapshotConnector(), "csv": ArtifactRefreshConnector(),
+            "xlsx": ArtifactRefreshConnector(), "sqlite": ArtifactRefreshConnector(),
             "postgresql": PostgresRefreshConnector(),
         }
         self.lock_seconds = max(30, min(int(lock_seconds), 1800))

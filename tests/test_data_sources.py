@@ -5,11 +5,12 @@ import pytest
 from openpyxl import Workbook
 
 from app import create_app
-from models import AuditArea, db
+from models import AuditArea, DataSnapshot, DataSource, DataSourceArtifact, db
+from services.source_sync import FullRefreshService
 
 
 @pytest.fixture()
-def client(tmp_path):
+def app(tmp_path):
     application = create_app({"TESTING": True,
                               "AUTH_REQUIRED": False,
                               "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'app.db'}",
@@ -17,7 +18,12 @@ def client(tmp_path):
     with application.app_context():
         db.session.add(AuditArea(name="Data tests"))
         db.session.commit()
-    return application.test_client()
+    return application
+
+
+@pytest.fixture()
+def client(app):
+    return app.test_client()
 
 
 def _xlsx_bytes():
@@ -113,3 +119,62 @@ def test_rejects_unknown_sqlite_table(client, tmp_path):
     }, content_type="multipart/form-data")
     assert response.status_code == 400
     assert response.get_json()["error"] == "requested table does not exist"
+
+
+def test_csv_upload_reload_versions_artifact_and_snapshot(app, client):
+    first_bytes = b"id,amount\n1,50\n"
+    first = client.post("/api/data-sources/upload", data={"audit_area_id": "1",
+        "name": "Reloadable", "file": (io.BytesIO(first_bytes), "ledger.csv")},
+        content_type="multipart/form-data")
+    assert first.status_code == 201
+    source_id = first.get_json()["source_id"]
+    assert first.get_json()["artifact_version"] == 1
+    assert len(first.get_json()["checksum"]) == 64
+
+    second_bytes = b"id,amount\n1,75\n2,250\n"
+    second = client.post(f"/api/data-sources/{source_id}/reload", data={
+        "file": (io.BytesIO(second_bytes), "ledger-v2.csv")}, content_type="multipart/form-data")
+    assert second.status_code == 201
+    assert second.get_json()["artifact_version"] == 2
+    assert second.get_json()["record_count"] == 2
+    duplicate = client.post(f"/api/data-sources/{source_id}/reload", data={
+        "file": (io.BytesIO(second_bytes), "copy.csv")}, content_type="multipart/form-data")
+    assert duplicate.status_code == 409
+
+    with app.app_context():
+        source = db.session.get(DataSource, source_id)
+        assert source.config["records"][1]["amount"] == "250"
+        assert [item.version for item in source.artifacts] == [1, 2]
+        assert [item.status for item in DataSnapshot.query.filter_by(
+            data_source_id=source_id).order_by(DataSnapshot.version)] == ["superseded", "active"]
+        assert all(len(item.content_checksum) == 64 for item in DataSourceArtifact.query.all())
+
+
+def test_file_sync_reloads_from_immutable_artifact_instead_of_mutated_snapshot(app, client):
+    response = client.post("/api/data-sources/upload", data={"audit_area_id": "1",
+        "file": (io.BytesIO(b"id,amount\n1,50\n"), "ledger.csv")},
+        content_type="multipart/form-data")
+    source_id = response.get_json()["source_id"]
+    with app.app_context():
+        source = db.session.get(DataSource, source_id)
+        source.config = {**source.config, "records": [{"tampered": True}]}
+        db.session.commit()
+        run, _ = FullRefreshService().synchronize(source, "artifact-refresh")
+        assert run.status == "succeeded"
+        assert db.session.get(DataSource, source_id).config["records"] == [{"id": "1", "amount": "50"}]
+
+
+def test_sqlite_connector_test_discovery_and_preview(client, tmp_path):
+    content = _sqlite_bytes(tmp_path)
+    tested = client.post("/api/connectors/sqlite/test", data={
+        "file": (io.BytesIO(content), "ledger.db")}, content_type="multipart/form-data")
+    assert tested.status_code == 200
+    assert tested.get_json()["status"] == "ok"
+    discovered = client.post("/api/connectors/sqlite/tables", data={
+        "file": (io.BytesIO(content), "ledger.db")}, content_type="multipart/form-data")
+    assert discovered.get_json()["tables"] == ["payments"]
+    preview = client.post("/api/connectors/sqlite/preview", data={"table_name": "payments", "limit": "1",
+        "file": (io.BytesIO(content), "ledger.db")}, content_type="multipart/form-data")
+    assert preview.status_code == 200
+    assert preview.get_json()["total_records"] == 2
+    assert preview.get_json()["records"] == [{"id": 1, "vendor": "Atlas", "amount": 50.0}]
