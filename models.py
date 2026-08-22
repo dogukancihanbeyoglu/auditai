@@ -53,6 +53,8 @@ class DataSource(db.Model):
                                 cascade="all, delete-orphan")
     artifacts = db.relationship("DataSourceArtifact", back_populates="data_source",
                                 cascade="all, delete-orphan")
+    rule_links = db.relationship("RuleDataSource", back_populates="data_source",
+                                 cascade="all, delete-orphan")
 
 
 class DataSourceArtifact(db.Model):
@@ -229,6 +231,36 @@ class AuditRule(db.Model):
     alarms = db.relationship("Alarm", back_populates="rule", cascade="all, delete-orphan")
     executions = db.relationship("RuleExecution", back_populates="rule", cascade="all, delete-orphan")
     risk_scores = db.relationship("RiskScore", back_populates="rule", cascade="all, delete-orphan")
+    source_links = db.relationship("RuleDataSource", back_populates="rule",
+                                   cascade="all, delete-orphan", order_by="RuleDataSource.priority")
+
+
+class RuleDataSource(db.Model):
+    """Ordered, aliased source and safe equality-join definition for one rule."""
+
+    __tablename__ = "rule_data_sources"
+    __table_args__ = (
+        db.UniqueConstraint("rule_id", "alias", name="uq_rule_data_source_alias"),
+        db.UniqueConstraint("rule_id", "data_source_id", name="uq_rule_data_source_source"),
+        db.CheckConstraint("join_type IN ('inner', 'left')", name="ck_rule_source_join_type"),
+        db.CheckConstraint("join_operator IN ('eq', 'casefold_eq', 'numeric_eq')",
+                           name="ck_rule_source_join_operator"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey("audit_rules.id"), nullable=False, index=True)
+    data_source_id = db.Column(db.Integer, db.ForeignKey("data_sources.id"), nullable=False, index=True)
+    alias = db.Column(db.String(64), nullable=False)
+    priority = db.Column(db.Integer, nullable=False, default=0)
+    join_to_alias = db.Column(db.String(64), nullable=True)
+    left_field = db.Column(db.String(128), nullable=True)
+    right_field = db.Column(db.String(128), nullable=True)
+    join_type = db.Column(db.String(16), nullable=False, default="inner")
+    join_operator = db.Column(db.String(24), nullable=False, default="eq")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    rule = db.relationship("AuditRule", back_populates="source_links")
+    data_source = db.relationship("DataSource", back_populates="rule_links")
 
 
 class RuleExecution(db.Model):
