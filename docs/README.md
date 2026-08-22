@@ -1,132 +1,108 @@
-# AuditAI - Akıllı Denetim ve Uyumluluk Sistemi
+# AuditAI
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
-[![Flask](https://img.shields.io/badge/Flask-Latest-green.svg)](https://flask.palletsprojects.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+**Data-driven internal audit and compliance analytics platform**
 
-AuditAI, kurumsal denetim süreçlerini otomatikleştirmek ve yapay zeka ile desteklemek için geliştirilmiş kapsamlı bir web uygulamasıdır.
+AuditAI is a Flask-based prototype for managing audit areas, connecting structured data sources, defining control rules and generating risk-focused alerts. The project explores how audit expertise, data analytics and automation can work together in a privacy-safe portfolio application.
 
-## 🚀 Özellikler
+> Project status: active prototype. Use synthetic or anonymized data only.
 
-- **Akıllı Denetim Yönetimi**: Otomatik denetim kuralları ve alarm sistemi
-- **Yapay Zeka Entegrasyonu**: ML tabanlı anomali tespiti ve öngörü analizi
-- **Çoklu Veri Kaynağı Desteği**: Farklı veri kaynaklarından otomatik veri çekme
-- **Real-time Monitoring**: Gerçek zamanlı izleme ve alarm sistemi
-- **Kapsamlı Raporlama**: Detaylı analiz ve raporlama araçları
-- **Güvenli Kullanıcı Yönetimi**: Rol tabanlı erişim kontrolü
+## Why AuditAI?
 
-## 📋 Gereksinimler
+Traditional audit testing often depends on manual sampling. AuditAI is designed to support broader and more repeatable testing through:
 
-- Python 3.8+
-- Flask
-- SQLAlchemy
-- Pandas, NumPy (Veri analizi için)
-- Scikit-learn (ML özellikleri için)
+- Configurable audit areas and control rules
+- Structured data-source management
+- Exception and threshold-based testing
+- Alert generation and follow-up workflows
+- Role-based access for administrators and auditors
+- Exportable audit evidence and management reporting
+- Foundations for statistical analysis and anomaly detection
 
-## 🛠️ Kurulum
+## Technology
 
-1. Projeyi klonlayın:
-```bash
-git clone https://github.com/dogukancihanbeyoglu/auditai.git
-cd auditai
-```
+- Python 3.11+
+- Flask, Flask-SQLAlchemy and Flask-Login
+- SQLAlchemy with SQLite for local development
+- PostgreSQL-compatible production configuration
+- pandas and openpyxl for analytical workflows
+- ReportLab and python-docx for document output
+- pytest-based test utilities
 
-2. Sanal ortam oluşturun ve aktifleştirin:
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate    # Windows
-```
+## Project Structure
 
-3. Bağımlılıkları yükleyin:
-```bash
-pip install -r requirements.txt
-# veya
-uv sync
-```
+    auditai/
+    ├── app.py                  # Application bootstrap and configuration
+    ├── models.py               # Database models
+    ├── forms.py                # Form validation
+    ├── src/                    # Application source modules
+    ├── templates/              # User-interface templates
+    ├── tests/                  # Test and synthetic-data utilities
+    ├── docs/                   # Technical and user documentation
+    ├── pyproject.toml          # Project metadata and dependencies
+    └── requirements.txt        # pip-compatible dependencies
 
-4. Veritabanını başlatın:
-```bash
-python -c "from app import app, db; app.app_context().push(); db.create_all()"
-```
+## Quick Start
 
-5. Uygulamayı çalıştırın:
-```bash
-python app.py
-```
+### 1. Clone and create an environment
 
-## 📊 Kullanım
+    git clone https://github.com/dogukancihanbeyoglu/auditai.git
+    cd auditai
+    python3.11 -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
 
-1. Tarayıcınızda `http://localhost:5000` adresine gidin
-2. İlk kullanım için admin hesabı oluşturun
-3. Dashboard üzerinden denetim alanlarını ve kurallarını yapılandırın
-4. Veri kaynaklarını bağlayın ve otomatik izleme başlatın
+On Windows, activate the environment with .venv\Scripts\activate.
 
-## 📁 Proje Yapısı
+### 2. Configure required environment variables
 
-```
-auditai/
-├── src/                    # Ana kaynak kodlar
-├── routes/                 # Flask route'ları
-├── templates/              # HTML şablonları
-├── static/                 # Statik dosyalar (CSS, JS)
-├── tests/                  # Test dosyaları
-├── docs/                   # Dokümantasyon
-├── config/                 # Yapılandırma dosyaları
-├── app.py                  # Ana uygulama dosyası
-├── models.py               # Veritabanı modelleri
-└── requirements.txt        # Python bağımlılıkları
-```
+    export SESSION_SECRET="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+    export DATABASE_URL="sqlite:///auditai.db"
+    export ADMIN_EMAIL="admin@example.com"
+    export ADMIN_PASSWORD="replace-with-a-strong-password"
+    export ADMIN_USERNAME="admin"
 
-## 🤖 Yapay Zeka Özellikleri
+SESSION_SECRET is mandatory. An initial administrator is created only when both ADMIN_EMAIL and ADMIN_PASSWORD are provided. Never commit real credentials.
 
-- **Anomali Tespiti**: Otomatik veri anomalisi tanımlama
-- **Öngörü Analizi**: Gelecek trendler ve risk tahmini
-- **Akıllı Kurallar**: Adaptif denetim kuralları
-- **Otomatik Sınıflandırma**: Risk seviyesi belirleme
+### 3. Run the application
 
-## 📖 Dokümantasyon
+    python app.py
 
-Detaylı kullanım kılavuzu ve teknik dokümantasyon için `/docs` klasörüne bakın:
+Open http://localhost:5000.
 
-- [Kapsamlı Kullanıcı Kılavuzu](docs/COMPLETE_USER_GUIDE.md)
-- [Yapay Zeka Teknik Kılavuzu](docs/AI_ML_TECHNICAL_GUIDE.md)
-- [Alarm Üretim Kılavuzu](docs/ALARM_GENERATION_GUIDE.md)
+## Testing
 
-## 🧪 Test
+    python -m pytest tests/
 
-Test çalıştırmak için:
-```bash
-python -m pytest tests/
-```
+The test utilities are intended to use synthetic data. Review generated files before sharing them publicly.
 
-Test verisi oluşturmak için:
-```bash
-python tests/create_test_data.py
-```
+## Security and Privacy
 
-## 🤝 Katkıda Bulunma
+- No default password or fallback session secret is included.
+- Debug mode is disabled unless explicitly enabled through FLASK_DEBUG.
+- Production credentials must be supplied through environment variables or a secret manager.
+- Corporate, personal and confidential audit data must never be committed.
+- Public demonstrations should use synthetic or irreversibly anonymized datasets.
 
-1. Bu projeyi fork edin
-2. Özellik dalı oluşturun (`git checkout -b feature/yeni-ozellik`)
-3. Değişikliklerinizi commit edin (`git commit -am 'Yeni özellik eklendi'`)
-4. Dalınıza push edin (`git push origin feature/yeni-ozellik`)
-5. Pull Request oluşturun
+## Documentation
 
-## 📄 Lisans
+Additional technical notes and usage guides are available in the [docs](docs/) directory.
 
-Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
+## Roadmap
 
-## 👨‍💻 Geliştirici
+- [ ] Add repeatable automated tests to CI
+- [ ] Separate application factory and configuration layers
+- [ ] Add reproducible synthetic audit datasets
+- [ ] Document rule evaluation with worked examples
+- [ ] Add model-performance and explainability reporting
+- [ ] Publish a privacy-safe demonstration environment
 
-**Doğukan Cihanbeyoğlu**
-- GitHub: [@dogukancihanbeyoglu](https://github.com/dogukancihanbeyoglu)
-- LinkedIn: [Doğukan Cihanbeyoğlu](https://www.linkedin.com/in/dogukanc/)
+## License
 
-## 📞 Destek
+Licensed under the MIT License. See [docs/LICENSE](docs/LICENSE).
 
-Herhangi bir sorun veya öneri için GitHub Issues kullanabilir veya doğrudan iletişime geçebilirsiniz.
+## Author
 
----
+**Doğukan Cihanbeyoğlu**  
+Senior Internal Auditor | Audit Analytics | Data Analytics
 
-⭐ Bu projeyi beğendiyseniz, lütfen yıldız verin!
+[LinkedIn](https://www.linkedin.com/in/dogukanc/) · [GitHub](https://github.com/dogukancihanbeyoglu)
