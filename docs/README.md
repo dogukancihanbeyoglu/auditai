@@ -2,7 +2,7 @@
 
 **Privacy-safe internal audit and compliance analytics portfolio prototype**
 
-AuditAI explores how internal-audit expertise, structured data testing and responsible automation can work together. The current version provides a lightweight Flask demonstration, a health endpoint, domain models, form definitions, synthetic-data utilities and detailed concept documentation.
+AuditAI explores how internal-audit expertise, structured data testing and responsible automation can work together. The current version provides a functional Flask application, persistent audit-domain models, a deterministic rule engine, synthetic records, alert workflows and automated tests.
 
 > **Status:** portfolio prototype. Use synthetic or irreversibly anonymized data only.
 
@@ -15,17 +15,22 @@ AuditAI explores how internal-audit expertise, structured data testing and respo
 - Foundations for statistical analysis and explainable anomaly detection
 - Privacy, credential and public-repository hygiene
 
-## Current scope
+## Functional workflow
 
-The executable application is intentionally lightweight: it serves a professional concept page and a machine-readable health endpoint. The broader workflow documents, models and test-data generators are architectural assets for the next implementation phase. Production authentication, route modules and live enterprise integrations are not represented as complete features.
+1. Review the seeded audit area and synthetic invoice ledger.
+2. Create threshold-based control rules from the dashboard.
+3. Run a control against the stored source records.
+4. Inspect affected records in each generated alert.
+5. Acknowledge and resolve alerts while dashboard metrics update.
+
+The application persists state in SQLite and exposes the same workflow through JSON endpoints under `/api`. Authentication, scheduled execution and live enterprise integrations remain roadmap items and are not presented as completed features.
 
 ## Technology
 
 - Python 3.11+
 - Flask
 - SQLAlchemy and Flask-SQLAlchemy
-- pandas and openpyxl
-- pytest utilities
+- pytest integration tests
 - Bootstrap 5
 
 ## Project structure
@@ -34,7 +39,6 @@ The executable application is intentionally lightweight: it serves a professiona
 auditai/
 ├── app.py              # Flask application factory and health endpoint
 ├── models.py           # Audit-domain data models
-├── forms.py            # Form and validation definitions
 ├── src/                # Alternative application entrypoint
 ├── templates/          # Portfolio demonstration interface
 ├── tests/              # Tests and synthetic-data generators
@@ -65,7 +69,7 @@ python -m compileall app.py src
 python -m pytest tests/
 ```
 
-Some files in `tests/` are data-generation utilities rather than automated assertions. Review generated artifacts before publishing them.
+The integration suite verifies the dashboard, health check, rule creation, rule execution, alert creation, affected records and alert resolution. Some additional files in `tests/` are synthetic-data generators rather than automated assertions.
 
 ## Security and privacy
 
