@@ -123,3 +123,6 @@ Every completed capability must include automated tests, error handling, safe de
 - [x] Kontrollü bordro, yevmiye, görevler ayrılığı, mükerrer fatura ve fiyat farkı senaryoları
 - [x] Altı çalışabilir denetim kuralı ve üç veri kalitesi kontrolü
 - [x] Sabit seed, sentetik veri işareti, veri sözlüğü ve otomatik üretici testleri
+- [x] Kart geçişi, çekirdek saat izin uyumu ve mesai dışı çalışma onayı verileri
+- [x] Yıllık izin eksi bakiye belgesi ve terfi uygunluğu kontrol verileri
+- [x] SAP benzeri SAT/SAS, teklif, onay limiti, kabul ve üçlü eşleşme kontrol verileri

@@ -53,6 +53,20 @@ def create_hr(path: Path, rng: random.Random) -> None:
       off_cycle INTEGER, synthetic_flag INTEGER);
     CREATE TABLE time_entries(entry_id TEXT PRIMARY KEY, employee_id TEXT, work_date TEXT,
       hours REAL, weekend_entry INTEGER, approval_status TEXT, synthetic_flag INTEGER);
+    CREATE TABLE access_events(event_id TEXT PRIMARY KEY, employee_id TEXT, event_time TEXT,
+      direction TEXT, gate_code TEXT, card_status TEXT, synthetic_flag INTEGER);
+    CREATE TABLE attendance_compliance(control_id TEXT PRIMARY KEY, employee_id TEXT, work_date TEXT,
+      first_entry TEXT, last_exit TEXT, core_absence_minutes INTEGER, leave_notification INTEGER,
+      after_hours_minutes INTEGER, manager_overtime_approval INTEGER,
+      unreported_core_absence INTEGER, unapproved_after_hours INTEGER, synthetic_flag INTEGER);
+    CREATE TABLE leave_compliance(control_id TEXT PRIMARY KEY, employee_id TEXT, leave_year INTEGER,
+      annual_entitlement REAL, used_days REAL, requested_days REAL, projected_balance REAL,
+      negative_balance INTEGER, negative_balance_form_required INTEGER,
+      negative_balance_form_delivered INTEGER, undocumented_negative_leave INTEGER, synthetic_flag INTEGER);
+    CREATE TABLE promotion_eligibility(control_id TEXT PRIMARY KEY, employee_id TEXT, department TEXT,
+      years_in_grade REAL, promotion_cycle_years REAL, performance_score REAL,
+      disciplinary_action INTEGER, eligible_for_promotion INTEGER, promoted INTEGER,
+      promotion_overdue INTEGER, synthetic_flag INTEGER);
     """)
     employees = []
     for i in range(1, 501):
@@ -91,6 +105,41 @@ def create_hr(path: Path, rng: random.Random) -> None:
         entries.append((f"TE{i:08d}", f"E{rng.randint(1,500):06d}", iso(work_day), hours,
                         int(work_day.weekday() >= 5), rng.choice(["approved", "approved", "pending"]), 1))
     connection.executemany("INSERT INTO time_entries VALUES(?,?,?,?,?,?,?)", entries)
+    access_events, attendance, leave_rows, promotions = [], [], [], []
+    for i, emp in enumerate(employees, 1):
+        work_day = date.today() - timedelta(days=i % 25)
+        entry_hour, exit_hour = 8 + (i % 3), 17 + (i % 4)
+        core_absence = 0
+        leave_notice, overtime_approval = 1, 1
+        if i in {21, 121, 221, 321}: core_absence, leave_notice = 150, 0
+        after_hours = max(0, (exit_hour - 18) * 60)
+        if i in {42, 142, 242}: exit_hour, after_hours, overtime_approval = 23, 300, 0
+        access_events.extend([
+            (f"AE-{i:06d}-IN", emp[0], f"{iso(work_day)}T{entry_hour:02d}:05:00Z", "IN", "HQ-01", "active", 1),
+            (f"AE-{i:06d}-OUT", emp[0], f"{iso(work_day)}T{exit_hour:02d}:10:00Z", "OUT", "HQ-01", "active", 1),
+        ])
+        attendance.append((f"AC{i:06d}", emp[0], iso(work_day), f"{entry_hour:02d}:05", f"{exit_hour:02d}:10",
+            core_absence, leave_notice, after_hours, overtime_approval,
+            int(core_absence > 60 and not leave_notice), int(after_hours > 120 and not overtime_approval), 1))
+        entitlement, used, requested = 20.0, round(rng.uniform(2, 19), 1), round(rng.uniform(1, 5), 1)
+        form_delivered = 1
+        if i in {63, 163, 263}: used, requested, form_delivered = 20.0, 5.0, 0
+        projected = round(entitlement - used - requested, 1)
+        negative = int(projected < 0)
+        leave_rows.append((f"LC{i:06d}", emp[0], date.today().year, entitlement, used, requested,
+            projected, negative, negative, form_delivered, int(negative and not form_delivered), 1))
+        years = round(rng.uniform(.5, 7), 1); score = round(rng.uniform(2.2, 5), 2)
+        disciplinary = 0
+        eligible = int(years >= 3 and score >= 4 and not disciplinary)
+        promoted = eligible
+        if i in {84, 184, 284, 384}:
+            years, score, eligible, promoted = 5.5, 4.7, 1, 0
+        promotions.append((f"PC{i:06d}", emp[0], emp[3], years, 3.0, score, disciplinary,
+                           eligible, promoted, int(eligible and not promoted), 1))
+    connection.executemany("INSERT INTO access_events VALUES(?,?,?,?,?,?,?)", access_events)
+    connection.executemany("INSERT INTO attendance_compliance VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", attendance)
+    connection.executemany("INSERT INTO leave_compliance VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", leave_rows)
+    connection.executemany("INSERT INTO promotion_eligibility VALUES(?,?,?,?,?,?,?,?,?,?,?)", promotions)
     connection.commit(); connection.close()
 
 
@@ -144,6 +193,19 @@ def create_procurement(path: Path, rng: random.Random) -> None:
     CREATE TABLE invoices(invoice_id TEXT PRIMARY KEY, invoice_number TEXT, vendor_id TEXT,
       po_number TEXT, invoice_date TEXT, posting_date TEXT, amount REAL, po_amount REAL, currency TEXT,
       quantity_variance REAL, price_variance REAL, duplicate_marker INTEGER, synthetic_flag INTEGER);
+    CREATE TABLE sat_requisitions(sat_number TEXT PRIMARY KEY, requester_id TEXT, company_code TEXT,
+      cost_center TEXT, request_date TEXT, material_group TEXT, amount REAL, currency TEXT,
+      budget_available INTEGER, manager_approved INTEGER, technical_spec_attached INTEGER,
+      retroactive_request INTEGER, synthetic_flag INTEGER);
+    CREATE TABLE sas_compliance(control_id TEXT PRIMARY KEY, sas_number TEXT, sat_number TEXT,
+      vendor_id TEXT, buyer_id TEXT, order_date TEXT, amount REAL, approval_limit REAL,
+      sat_exists INTEGER, approved_sat INTEGER, required_bid_count INTEGER, received_bid_count INTEGER,
+      contract_exists INTEGER, approval_complete INTEGER, sas_without_sat INTEGER,
+      insufficient_competition INTEGER, approval_limit_breach INTEGER, synthetic_flag INTEGER);
+    CREATE TABLE receipt_compliance(control_id TEXT PRIMARY KEY, sas_number TEXT, invoice_id TEXT,
+      receipt_date TEXT, invoice_date TEXT, ordered_quantity REAL, received_quantity REAL,
+      invoiced_quantity REAL, service_acceptance_approved INTEGER, three_way_match_exception INTEGER,
+      invoice_before_receipt INTEGER, synthetic_flag INTEGER);
     """)
     vendors = []
     for i in range(1, 401):
@@ -170,18 +232,56 @@ def create_procurement(path: Path, rng: random.Random) -> None:
         invoices.append((f"IV{i:08d}",inv_no,po[1],po[0],iso(day),iso(day+timedelta(days=rng.randint(0,5))),
           amount,po[6],"TRY",round(rng.uniform(-.03,.03),4),round((amount-po[6])/po[6],4),duplicate,1))
     connection.executemany("INSERT INTO invoices VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",invoices)
+    sats, sas_controls, receipts = [], [], []
+    for i in range(1, 1501):
+        po = orders[i-1]
+        sat_number = f"SAT{i:08d}"
+        sat_exists, sat_approved = 1, 1
+        bids_required, bids_received = (3, 3) if po[6] >= 100_000 else (1, 1)
+        contract_exists, approval_complete = 1, 1
+        if i in {71, 471, 871}: sat_number, sat_exists, sat_approved = "", 0, 0
+        if i in {95, 495, 895}: bids_required, bids_received = 3, 1
+        if i in {117, 517}: approval_complete = 0
+        sats.append((f"SAT{i:08d}", f"E{rng.randint(1,500):06d}", po[2], po[5], po[3],
+            rng.choice(["IT", "OFİS", "DANIŞMANLIK", "BAKIM"]), po[6], "TRY", 1,
+            sat_approved, 1, int(i in {233, 733}), 1))
+        effective_limit = po[6] - 1 if i in {117, 517} else po[8]
+        sas_controls.append((f"SC{i:08d}", po[0], sat_number, po[1], po[4], po[3], po[6], effective_limit,
+            sat_exists, sat_approved, bids_required, bids_received, contract_exists, approval_complete,
+            int(not sat_exists), int(bids_received < bids_required),
+            int(po[6] > effective_limit and not approval_complete), 1))
+    for i, invoice in enumerate(invoices, 1):
+        ordered = float(rng.randint(1, 100)); received = ordered; invoiced = ordered
+        accepted = 1
+        if i in {211, 611, 1011}: received, invoiced = ordered * .7, ordered
+        if i in {322, 722}: accepted = 0
+        receipt_day = date.fromisoformat(invoice[4]) - timedelta(days=rng.randint(1, 8))
+        if i in {433, 833, 1233}: receipt_day = date.fromisoformat(invoice[4]) + timedelta(days=4)
+        receipts.append((f"RC{i:08d}", invoice[3], invoice[0], iso(receipt_day), invoice[4], ordered,
+            received, invoiced, accepted, int(received != invoiced or not accepted),
+            int(date.fromisoformat(invoice[4]) < receipt_day), 1))
+    connection.executemany("INSERT INTO sat_requisitions VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", sats)
+    connection.executemany("INSERT INTO sas_compliance VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", sas_controls)
+    connection.executemany("INSERT INTO receipt_compliance VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", receipts)
     connection.commit(); connection.close()
 
 
 SOURCE_TABLES = {
     "İnsan Kaynakları": [("Kurumsal İK - Personel", "hr.db", "employees"),
                           ("Kurumsal İK - Bordro", "hr.db", "payroll"),
-                          ("Kurumsal İK - Zaman Kayıtları", "hr.db", "time_entries")],
+                          ("Kurumsal İK - Zaman Kayıtları", "hr.db", "time_entries"),
+                          ("Kurumsal İK - Kart Geçişleri", "hr.db", "access_events"),
+                          ("Kurumsal İK - Devam Kontrolleri", "hr.db", "attendance_compliance"),
+                          ("Kurumsal İK - İzin Kontrolleri", "hr.db", "leave_compliance"),
+                          ("Kurumsal İK - Terfi Uygunluğu", "hr.db", "promotion_eligibility")],
     "Finans ve Muhasebe": [("Kurumsal Finans - Yevmiye", "finance.db", "gl_journal"),
                             ("Kurumsal Finans - Ödemeler", "finance.db", "payments")],
     "Satın Alma ve Tedarik": [("Kurumsal Satın Alma - Tedarikçiler", "procurement.db", "vendors"),
                                ("Kurumsal Satın Alma - Siparişler", "procurement.db", "purchase_orders"),
-                               ("Kurumsal Satın Alma - Faturalar", "procurement.db", "invoices")],
+                               ("Kurumsal Satın Alma - Faturalar", "procurement.db", "invoices"),
+                               ("Kurumsal SAP - SAT Talepleri", "procurement.db", "sat_requisitions"),
+                               ("Kurumsal SAP - SAS Kontrolleri", "procurement.db", "sas_compliance"),
+                               ("Kurumsal SAP - Kabul ve Üçlü Eşleşme", "procurement.db", "receipt_compliance")],
 }
 
 
@@ -192,6 +292,15 @@ RULES = [
     ("Finans ve Muhasebe", "Kurumsal Finans - Ödemeler", "Görevler ayrılığı ihlali", "numeric", "same_user_created_approved", {"operator": ">", "value": 0}, "critical"),
     ("Satın Alma ve Tedarik", "Kurumsal Satın Alma - Faturalar", "Mükerrer fatura numarası", "duplicate", "invoice_number", {"fields": ["invoice_number"]}, "critical"),
     ("Satın Alma ve Tedarik", "Kurumsal Satın Alma - Faturalar", "Yüksek fatura fiyat farkı", "numeric", "price_variance", {"operator": ">", "value": .10}, "high"),
+    ("İnsan Kaynakları", "Kurumsal İK - Devam Kontrolleri", "Çekirdek saatte izinsiz dışarıda", "numeric", "unreported_core_absence", {"operator": ">", "value": 0}, "high"),
+    ("İnsan Kaynakları", "Kurumsal İK - Devam Kontrolleri", "Onaysız mesai dışı ofis kullanımı", "numeric", "unapproved_after_hours", {"operator": ">", "value": 0}, "high"),
+    ("İnsan Kaynakları", "Kurumsal İK - İzin Kontrolleri", "Belgesiz eksi yıllık izin", "numeric", "undocumented_negative_leave", {"operator": ">", "value": 0}, "high"),
+    ("İnsan Kaynakları", "Kurumsal İK - Terfi Uygunluğu", "Gecikmiş terfi adayı", "numeric", "promotion_overdue", {"operator": ">", "value": 0}, "medium"),
+    ("Satın Alma ve Tedarik", "Kurumsal SAP - SAS Kontrolleri", "SAT olmadan SAS oluşturma", "numeric", "sas_without_sat", {"operator": ">", "value": 0}, "critical"),
+    ("Satın Alma ve Tedarik", "Kurumsal SAP - SAS Kontrolleri", "Yetersiz teklif rekabeti", "numeric", "insufficient_competition", {"operator": ">", "value": 0}, "high"),
+    ("Satın Alma ve Tedarik", "Kurumsal SAP - SAS Kontrolleri", "Onay limiti ihlal edilen SAS", "numeric", "approval_limit_breach", {"operator": ">", "value": 0}, "critical"),
+    ("Satın Alma ve Tedarik", "Kurumsal SAP - Kabul ve Üçlü Eşleşme", "Üçlü eşleşme istisnası", "numeric", "three_way_match_exception", {"operator": ">", "value": 0}, "high"),
+    ("Satın Alma ve Tedarik", "Kurumsal SAP - Kabul ve Üçlü Eşleşme", "Kabulden önce fatura kaydı", "numeric", "invoice_before_receipt", {"operator": ">", "value": 0}, "high"),
 ]
 
 
@@ -245,6 +354,18 @@ def register_controls(source_map: dict[str, DataSource]) -> None:
                                        field_name=field, parameters={}))
 
 
+def reset_generated_evidence() -> None:
+    """Keep reruns deterministic by clearing only evidence owned by this synthetic package."""
+    rules = AuditRule.query.filter_by(description="Sentetik kurumsal denetim senaryosu").all()
+    for rule in rules:
+        for collection in (list(rule.alarms), list(rule.executions), list(rule.risk_scores)):
+            for item in collection:
+                db.session.delete(item)
+        rule.trigger_count = 0
+        rule.last_run_at = None
+    db.session.flush()
+
+
 def main() -> None:
     rng = random.Random(SEED)
     OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -254,7 +375,7 @@ def main() -> None:
         if path.exists(): path.unlink()
         creator(path, rng)
     with app.app_context():
-        source_map = register_sources(); register_controls(source_map); db.session.commit()
+        source_map = register_sources(); reset_generated_evidence(); register_controls(source_map); db.session.commit()
         print(f"Generated 3 databases and registered {len(source_map)} AuditAI sources.")
         for name, source in source_map.items():
             print(f"- {name}: {len(source.config['records'])} records")

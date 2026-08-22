@@ -8,11 +8,11 @@ Her tabloda `synthetic_flag=1` alanı bulunur.
 
 | Dosya | Tablolar | Yaklaşık hacim | Ana ilişkiler |
 |---|---|---:|---|
-| `hr.db` | `employees`, `payroll`, `time_entries` | 8.500 | `employee_id`, şirket kodu, maliyet merkezi |
+| `hr.db` | personel, bordro, zaman, kart geçişi, devam, izin, terfi | 11.000 | `employee_id`, şirket kodu, maliyet merkezi |
 | `finance.db` | `gl_journal`, `payments` | 7.200 | belge no, tedarikçi, kullanıcı, şirket kodu |
-| `procurement.db` | `vendors`, `purchase_orders`, `invoices` | 3.700 | tedarikçi → sipariş → fatura |
+| `procurement.db` | tedarikçi, SAT, SAS, sipariş, fatura, kabul/eşleşme | 8.500 | tedarikçi → SAT → SAS → kabul → fatura |
 
-Dosyalar çalıştırma sırasında `instance/synthetic_enterprise/` altında üretilir ve sekiz
+Dosyalar çalıştırma sırasında `instance/synthetic_enterprise/` altında üretilir ve on beş
 ayrı AuditAI veri kaynağı olarak kaydedilir.
 
 ## Kontrollü denetim senaryoları
@@ -20,10 +20,18 @@ ayrı AuditAI veri kaynağı olarak kaydedilir.
 - Aynı banka hesabını kullanan çalışanlar
 - İşten ayrılmış personele bordro ödemesi
 - Aşırı fazla mesai ve dönem dışı bordro
+- Çekirdek saatte kartla çıkıp izin bildirimi yapmama
+- Mesai dışında ofiste kalıp yönetici onay belgesi oluşturmama
+- Eksi yıllık izin bakiyesi formunu teslim etmeme
+- Süresi ve performansı uygun olduğu halde terfi ettirilmeme
 - Yüksek tutarlı manuel yevmiye ve hafta sonu kaydı
 - Ödemeyi oluşturan ve onaylayan kullanıcının aynı olması
 - Çalışanla ilişkili tedarikçi banka hesabı
 - Onay limitinin hemen altında bölünmüş siparişler
+- SAT olmadan SAS oluşturma ve geriye dönük SAT
+- Zorunlu teklif sayısının altında satın alma
+- Eksik SAS onayı ve onay limiti ihlali
+- Mal/hizmet kabulü olmadan fatura ve üçlü eşleşme farkı
 - Mükerrer fatura numarası
 - Sipariş tutarını aşan fatura
 

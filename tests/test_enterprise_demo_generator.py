@@ -22,11 +22,19 @@ def test_enterprise_generators_create_expected_volumes_and_controlled_anomalies(
     assert scalar(hr, "SELECT count(*) FROM employees") == 500
     assert scalar(hr, "SELECT count(*) FROM payroll") == 3000
     assert scalar(hr, "SELECT count(*) FROM payroll WHERE overtime_hours > 45") == 3
+    assert scalar(hr, "SELECT count(*) FROM attendance_compliance WHERE unreported_core_absence = 1") == 4
+    assert scalar(hr, "SELECT count(*) FROM attendance_compliance WHERE unapproved_after_hours = 1") == 3
+    assert scalar(hr, "SELECT count(*) FROM leave_compliance WHERE undocumented_negative_leave = 1") == 3
+    assert scalar(hr, "SELECT count(*) FROM promotion_eligibility WHERE promotion_overdue = 1") >= 4
     assert scalar(finance, "SELECT count(*) FROM gl_journal") == 6000
     assert scalar(finance, "SELECT count(*) FROM payments WHERE same_user_created_approved = 1") == 3
     assert scalar(procurement, "SELECT count(*) FROM invoices") == 1800
     assert scalar(procurement, "SELECT count(*) FROM invoices WHERE duplicate_marker = 1") == 2
     assert scalar(procurement, "SELECT count(*) FROM vendors WHERE related_employee_id IS NOT NULL") == 2
+    assert scalar(procurement, "SELECT count(*) FROM sas_compliance WHERE sas_without_sat = 1") == 3
+    assert scalar(procurement, "SELECT count(*) FROM sas_compliance WHERE insufficient_competition = 1") == 3
+    assert scalar(procurement, "SELECT count(*) FROM sas_compliance WHERE approval_limit_breach = 1") == 2
+    assert scalar(procurement, "SELECT count(*) FROM receipt_compliance WHERE invoice_before_receipt = 1") == 3
 
 
 def test_every_enterprise_table_is_explicitly_marked_synthetic(tmp_path):
