@@ -277,6 +277,24 @@ def executive_dashboard_csv():
     })
 
 
+@reporting_bp.get("/api/reports/executive-dashboard.docx")
+@require_role("auditor")
+def executive_dashboard_docx():
+    from services.executive_word_report import build_executive_word_report
+
+    report = _executive_payload()
+    document = build_executive_word_report(report)
+    record_event("executive_report_exported", "management_report",
+                 details={"format": "docx", "filters": dict(request.args),
+                          "rule_count": len(report["rules"])})
+    db.session.commit()
+    return Response(document, mimetype=(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"), headers={
+        "Content-Disposition": "attachment; filename=auditai-yonetici-raporu.docx",
+        "X-Content-Type-Options": "nosniff",
+    })
+
+
 @reporting_bp.get("/api/reports/evidence-package.zip")
 @require_role("auditor")
 def evidence_package():

@@ -28,6 +28,8 @@ def test_health_and_dashboard(client):
     assert page.status_code == 200
     assert "Sürekli denetim ve kontrol izleme özeti".encode() in page.data
     assert "Veri Kaynakları".encode() in page.data
+    assert b"dashboardExecutiveMetrics" in page.data
+    assert "Word yönetici raporunu indir".encode() in page.data
 
 
 def test_workspace_includes_accessible_rule_editor_and_module_overviews(client):

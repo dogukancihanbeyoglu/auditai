@@ -80,6 +80,16 @@ def test_executive_dashboard_and_csv_export(app):
         event = AuditEvent.query.filter_by(action="executive_report_exported").one()
         assert event.details["rule_count"] == 1
 
+    word = client.get("/api/reports/executive-dashboard.docx?days=365")
+    assert word.status_code == 200
+    assert word.data.startswith(b"PK")
+    assert word.headers["Content-Disposition"].endswith("auditai-yonetici-raporu.docx")
+    assert len(word.data) > 20_000
+    with app.app_context():
+        formats = sorted(event.details["format"] for event in
+                         AuditEvent.query.filter_by(action="executive_report_exported").all())
+        assert formats == ["csv", "docx"]
+
 
 def test_webhook_delivery_uses_environment_and_mocked_network(app):
     service = NotificationService({"NOTIFICATION_WEBHOOK_URL": "https://example.invalid/audit",
