@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app import create_app
-from models import Alarm, AuditArea, AuditRule, DataSource, Notification, RuleExecution, db
+from models import Alarm, AuditArea, AuditEvent, AuditRule, DataSource, Notification, RuleExecution, db
 from notifications import NotificationService
 
 
@@ -52,6 +52,33 @@ def test_filterable_histories_and_management_summary(app):
     assert summary["alarms_by_severity"] == {"high": 1, "low": 1}
     assert b"High payment" in client.get("/api/reports/alarms.csv?status=open").data
     assert b"Resolved item" not in client.get("/api/reports/alarms.csv?status=open").data
+
+
+def test_executive_dashboard_and_csv_export(app):
+    client = app.test_client()
+    response = client.get("/api/reports/executive-dashboard?days=365")
+    assert response.status_code == 200
+    report = response.get_json()
+    assert report["kpis"]["active_rules"] == 1
+    assert report["kpis"]["execution_count"] == 2
+    assert report["kpis"]["scanned_records"] == 100
+    assert report["kpis"]["matched_records"] == 5
+    assert report["kpis"]["open_findings"] == 1
+    assert report["findings_by_source"] == [{"name": "Ledger", "count": 2}]
+    rule = report["rules"][0]
+    assert rule["sources"] == ["Ledger"]
+    assert rule["execution_count"] == 2
+    assert rule["finding_count"] == 2
+    assert rule["open_findings"] == 1
+    assert rule["priority"] == "high"
+
+    exported = client.get("/api/reports/executive-dashboard.csv?days=365")
+    assert exported.status_code == 200
+    assert exported.headers["Content-Disposition"].endswith("auditai-yonetici-raporu.csv")
+    assert "High payment" in exported.get_data(as_text=True)
+    with app.app_context():
+        event = AuditEvent.query.filter_by(action="executive_report_exported").one()
+        assert event.details["rule_count"] == 1
 
 
 def test_webhook_delivery_uses_environment_and_mocked_network(app):

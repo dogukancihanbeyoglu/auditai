@@ -5,7 +5,7 @@ import io
 import json
 import zipfile
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, Response, jsonify, request
 from sqlalchemy import func
@@ -76,6 +76,111 @@ def _risk_query():
     return query
 
 
+def _duration_seconds(execution):
+    if not execution.finished_at or not execution.started_at:
+        return None
+    return max(0.0, (execution.finished_at - execution.started_at).total_seconds())
+
+
+def _priority(severity, open_count):
+    if not open_count:
+        return "normal"
+    return {"critical": "immediate", "high": "high", "medium": "medium"}.get(severity, "low")
+
+
+def _executive_payload():
+    now = datetime.now(timezone.utc)
+    try:
+        days = min(max(int(request.args.get("days", 30)), 7), 365)
+    except ValueError:
+        days = 30
+    start = _date_arg("from") or now - timedelta(days=days - 1)
+    end = _date_arg("to") or now
+    area_id = request.args.get("audit_area_id")
+    rules_query = AuditRule.query
+    if area_id:
+        rules_query = rules_query.filter(AuditRule.audit_area_id == area_id)
+    rules = rules_query.order_by(AuditRule.name).all()
+    executions = _execution_query().filter(RuleExecution.started_at >= start,
+                                           RuleExecution.started_at <= end).all()
+    alarms = _alarm_query().filter(Alarm.created_at >= start, Alarm.created_at <= end).all()
+    execution_by_rule = {rule.id: [] for rule in rules}
+    alarm_by_rule = {rule.id: [] for rule in rules}
+    for item in executions:
+        execution_by_rule.setdefault(item.rule_id, []).append(item)
+    for item in alarms:
+        alarm_by_rule.setdefault(item.rule_id, []).append(item)
+
+    rule_rows = []
+    for rule in rules:
+        rule_executions = execution_by_rule.get(rule.id, [])
+        rule_alarms = alarm_by_rule.get(rule.id, [])
+        durations = [value for item in rule_executions if (value := _duration_seconds(item)) is not None]
+        sources = [link.data_source.name for link in rule.source_links] or [rule.data_source.name]
+        open_alarms = [item for item in rule_alarms if item.status != "resolved"]
+        last_finding = max((item.created_at for item in rule_alarms), default=None)
+        scanned = sum(item.scanned_records for item in rule_executions)
+        matched = sum(item.matched_records for item in rule_executions)
+        rule_rows.append({
+            "id": rule.id, "name": rule.name, "audit_area": rule.audit_area.name,
+            "rule_type": rule.rule_type, "field_name": rule.field_name,
+            "condition": rule.description or f"{rule.field_name} {rule.operator} {rule.threshold_value}",
+            "sources": sources, "source_count": len(sources), "severity": rule.severity,
+            "is_active": rule.is_active, "schedule_enabled": rule.schedule_enabled,
+            "schedule_interval_minutes": rule.schedule_interval_minutes,
+            "execution_count": len(rule_executions),
+            "successful_executions": sum(item.status == "completed" for item in rule_executions),
+            "average_duration_seconds": round(sum(durations) / len(durations), 3) if durations else 0,
+            "scanned_records": scanned, "matched_records": matched,
+            "match_rate": round(matched / scanned, 4) if scanned else 0,
+            "finding_count": len(rule_alarms), "open_findings": len(open_alarms),
+            "priority": _priority(rule.severity, len(open_alarms)),
+            "last_finding_at": last_finding.isoformat() if last_finding else None,
+            "last_run_at": rule.last_run_at.isoformat() if rule.last_run_at else None,
+        })
+
+    dates = [(start.date() + timedelta(days=offset))
+             for offset in range((end.date() - start.date()).days + 1)]
+    trend = [{"date": day.isoformat(),
+              "executions": sum(item.started_at.date() == day for item in executions),
+              "findings": sum(item.created_at.date() == day for item in alarms),
+              "resolved": sum(item.status == "resolved" and item.updated_at.date() == day for item in alarms)}
+             for day in dates]
+    source_findings = {}
+    for alarm in alarms:
+        name = alarm.data_source.name
+        source_findings[name] = source_findings.get(name, 0) + 1
+    severity = {level: sum(item.severity == level for item in alarms)
+                for level in ("critical", "high", "medium", "low")}
+    status = {level: sum(item.status == level for item in alarms)
+              for level in ("open", "acknowledged", "resolved")}
+    completed = [item for item in executions if item.status == "completed"]
+    durations = [value for item in executions if (value := _duration_seconds(item)) is not None]
+    resolved_hours = [max(0.0, (item.updated_at - item.created_at).total_seconds() / 3600)
+                      for item in alarms if item.status == "resolved"]
+    scanned = sum(item.scanned_records for item in executions)
+    matched = sum(item.matched_records for item in executions)
+    return {
+        "generated_at": now.isoformat(), "period": {"from": start.isoformat(), "to": end.isoformat()},
+        "kpis": {"active_rules": sum(rule.is_active for rule in rules),
+                 "execution_count": len(executions),
+                 "execution_success_rate": round(len(completed) / len(executions), 4) if executions else 0,
+                 "scanned_records": scanned, "matched_records": matched,
+                 "match_rate": round(matched / scanned, 4) if scanned else 0,
+                 "finding_count": len(alarms),
+                 "open_findings": sum(item.status != "resolved" for item in alarms),
+                 "critical_open_findings": sum(item.status != "resolved" and item.severity == "critical"
+                                                for item in alarms),
+                 "average_duration_seconds": round(sum(durations) / len(durations), 3) if durations else 0,
+                 "average_resolution_hours": round(sum(resolved_hours) / len(resolved_hours), 2)
+                 if resolved_hours else 0},
+        "findings_by_severity": severity, "findings_by_status": status,
+        "findings_by_source": [{"name": name, "count": count} for name, count in
+                               sorted(source_findings.items(), key=lambda item: (-item[1], item[0]))],
+        "trend": trend, "rules": rule_rows,
+    }
+
+
 @reporting_bp.get("/api/reports/alarms.csv")
 @require_role("auditor")
 def alarms_csv():
@@ -138,6 +243,38 @@ def management_summary():
                     "risk_snapshot_count": risk_count, "risk_by_level": risk_by_level,
                     "average_risk_score": round(float(average_risk), 2),
                     "maximum_risk_score": round(float(maximum_risk), 2)})
+
+
+@reporting_bp.get("/api/reports/executive-dashboard")
+@require_role()
+def executive_dashboard():
+    return jsonify(_executive_payload())
+
+
+@reporting_bp.get("/api/reports/executive-dashboard.csv")
+@require_role("auditor")
+def executive_dashboard_csv():
+    report = _executive_payload()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Kural", "Denetim alanı", "Kontrol kapsamı", "Veri kaynakları",
+                     "Sıklık (dakika)", "Çalıştırma", "Ort. süre (sn)", "Taranan",
+                     "Eşleşen", "Bulgu", "Açık bulgu", "Öncelik", "Son bulgu"])
+    for rule in report["rules"]:
+        writer.writerow([_csv_safe(rule["name"]), _csv_safe(rule["audit_area"]),
+                         _csv_safe(rule["condition"]), _csv_safe(", ".join(rule["sources"])),
+                         rule["schedule_interval_minutes"] or "Manuel", rule["execution_count"],
+                         rule["average_duration_seconds"], rule["scanned_records"],
+                         rule["matched_records"], rule["finding_count"], rule["open_findings"],
+                         rule["priority"], rule["last_finding_at"] or ""])
+    record_event("executive_report_exported", "management_report",
+                 details={"format": "csv", "filters": dict(request.args),
+                          "rule_count": len(report["rules"])})
+    db.session.commit()
+    return Response(output.getvalue(), mimetype="text/csv", headers={
+        "Content-Disposition": "attachment; filename=auditai-yonetici-raporu.csv",
+        "X-Content-Type-Options": "nosniff",
+    })
 
 
 @reporting_bp.get("/api/reports/evidence-package.zip")
