@@ -57,3 +57,22 @@ def test_source_schema_and_validation_guards_exist():
     assert "En az bir join anahtarı" in html
     assert "Boş mantıksal grup bırakılamaz." in html
     assert "NOT grubu tam olarak bir" in html
+
+
+def test_control_design_center_unifies_sources_governance_and_rules():
+    html = source()
+    assert 'data-nav="control-design">Kontrol Tasarım Merkezi' in html
+    assert '<a href="/data-sources" data-nav="data-sources">' not in html
+    assert '<a href="/data-governance" data-nav="data-governance">' not in html
+    assert '<a href="/rules" data-nav="rules">' not in html
+    for text in (
+        "Kontrol Tasarım Merkezi sekmeleri",
+        "Bağla ve incele",
+        "Eşle ve doğrula",
+        "Tasarla, test et, zamanla",
+        "Yeni veri kaynağı bağla",
+        "Kaynak kataloğu",
+        "sourceRecordCount",
+    ):
+        assert text in html
+    assert 'controlPages.includes(page)?\'control-design\':page' in html
